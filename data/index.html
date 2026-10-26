@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>ToolTrack — Control de herramientas</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">TT</div>
+        <div>
+          <h1>ToolTrack</h1>
+          <p>Control de inventario de herramientas</p>
+        </div>
+      </div>
+      <div class="topbar-meta">
+        <span class="badge" id="firmwareVersion">v0.1.0</span>
+        <span class="badge badge-muted" id="clock">--:--:--</span>
+      </div>
+    </header>
+
+    <section class="status-row" aria-label="Estado del sistema">
+      <article class="status-card">
+        <span class="status-label">Sistema</span>
+        <span class="status-value" id="statusSystem">Fase 0</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">WiFi</span>
+        <span class="status-value" id="statusWifi">Sin datos</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">Cámara</span>
+        <span class="status-value" id="statusCamera">Sin datos</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">Herramientas fuera</span>
+        <span class="status-value" id="statusTaken">0 / 12</span>
+      </article>
+    </section>
+
+    <nav class="tabs" aria-label="Secciones">
+      <button class="tab is-active" data-tab="cabinet" type="button">Armario</button>
+      <button class="tab" data-tab="history" type="button">Histórico</button>
+      <button class="tab" data-tab="admin" type="button">Administración</button>
+    </nav>
+
+    <main>
+      <section class="panel tab-panel is-active" id="tab-cabinet">
+        <div class="panel-head">
+          <div>
+            <h2>Estado del armario</h2>
+            <p>Matriz 4x3 · sensores IR + verificación por cámara</p>
+          </div>
+          <button class="button button-ghost" id="refreshButton" type="button">Actualizar</button>
+        </div>
+
+        <div class="cabinet-grid" id="cabinetGrid" aria-live="polite"></div>
+
+        <div class="legend">
+          <span><i class="dot dot-present"></i> Presente</span>
+          <span><i class="dot dot-missing"></i> Fuera</span>
+          <span><i class="dot dot-unknown"></i> Sin datos</span>
+        </div>
+      </section>
+
+      <section class="panel tab-panel" id="tab-history">
+        <div class="panel-head">
+          <div>
+            <h2>Histórico de uso</h2>
+            <p>Próximamente: filtros por herramienta, usuario y fecha.</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          <strong>En construcción</strong>
+          <span>El histórico se conectará en la Fase 1.</span>
+        </div>
+      </section>
+
+      <section class="panel tab-panel" id="tab-admin">
+        <div class="panel-head">
+          <div>
+            <h2>Administración</h2>
+            <p>Usuarios RFID, configuración de herramientas y ajustes del sistema.</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          <strong>En construcción</strong>
+          <span>El panel de administrador se habilitará en la Fase 1.</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>ToolTrack v2 · Fase 0</span>
+      <span>ESP32-S3 + XIAO ESP32-S3 Sense</span>
+    </footer>
+  </div>
+</body>
+</html>

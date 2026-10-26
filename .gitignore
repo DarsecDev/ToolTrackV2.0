@@ -1,0 +1,25 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+*.pyc
+__pycache__/
+
+# VS Code (se conserva la lista de extensiones recomendadas)
+.vscode/*
+!.vscode/extensions.json
+
+# Secretos locales
+include/secrets.h
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos originales del proyecto (no forman parte del firmware)
+/ProyectoFinal_ToolTrack.zip
+/Modificaciones Proyecto Tool Track Control.docx
+
+# Respaldos y artefactos
+*.bak
+*.tmp
