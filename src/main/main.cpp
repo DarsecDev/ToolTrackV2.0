@@ -1,9 +1,22 @@
 #include <Arduino.h>
+#include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
+#include <esp_random.h>
 
+#include <cstring>
+
+#include "actuators.h"
+#include "camera_link.h"
 #include "config.h"
+#include "ir_sensors.h"
+#include "rfid.h"
+#include "state.h"
+#include "storage.h"
+#include "time_sync.h"
+#include "types.h"
+#include "webserver.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -14,7 +27,24 @@
 namespace {
 
 constexpr uint32_t HEARTBEAT_MS = 10000;
-uint32_t lastHeartbeat = 0;
+constexpr uint32_t CAMERA_HEALTH_MS = 60000;
+
+uint32_t s_lastHeartbeat = 0;
+uint32_t s_sessionStart = 0;
+uint32_t s_lastCameraHealth = 0;
+bool s_analysisPending = false;
+bool s_analysisRunning = false;
+uint32_t s_analysisDue = 0;
+bool s_cameraOfflineLogged = false;
+bool s_acRaw = true;
+bool s_acStable = true;
+uint32_t s_acRawChanged = 0;
+
+void copyText(char* destination, size_t size, const char* source) {
+  if (size == 0) return;
+  std::strncpy(destination, source ? source : "", size - 1);
+  destination[size - 1] = '\0';
+}
 
 void printBanner() {
   Serial.println();
@@ -36,8 +66,8 @@ void printBanner() {
   } else {
     Serial.println("  PSRAM      : no detectada");
   }
-  Serial.printf("  Herramientas: %u (%ux%u)\n", cfg::TOOL_COUNT, cfg::GRID_ROWS,
-                cfg::GRID_COLS);
+  Serial.printf("  Herramientas: %u (%ux%u)\n", cfg::TOOL_COUNT,
+                cfg::GRID_ROWS, cfg::GRID_COLS);
   Serial.println("------------------------------------------------------------");
 }
 
@@ -52,45 +82,233 @@ bool mountStorage() {
   return true;
 }
 
-void configureSafeOutputs() {
-  const uint8_t outputs[] = {cfg::PIN_LOCK, cfg::PIN_LED_GREEN, cfg::PIN_LED_RED,
-                             cfg::PIN_BUZZER, cfg::PIN_LED_STRIP};
-  for (uint8_t pin : outputs) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, LOW);
-  }
-  Serial.println("[GPIO] Salidas inicializadas en estado seguro");
-}
-
-void connectWiFi() {
+bool connectWiFi() {
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
   WiFi.setHostname(cfg::MAIN_HOSTNAME);
 
   WiFiManager wifiManager;
-  wifiManager.setConfigPortalTimeout(180);
+  wifiManager.setConfigPortalTimeout(120);
   wifiManager.setConnectTimeout(20);
   wifiManager.setHostname(cfg::MAIN_HOSTNAME);
 
   Serial.println("[WIFI] Conectando (portal 'ToolTrack-Setup' si falla)...");
   if (!wifiManager.autoConnect("ToolTrack-Setup")) {
-    Serial.println("[WIFI] Sin conexión. Reinicio en 5 s");
-    delay(5000);
-    ESP.restart();
+    Serial.println("[WIFI] Sin conexión; el armario sigue operando en local");
+    return false;
   }
 
   Serial.printf("[WIFI] Conectado a '%s' con IP %s (RSSI %d dBm)\n",
                 WiFi.SSID().c_str(), WiFi.localIP().toString().c_str(),
                 WiFi.RSSI());
+
+  if (MDNS.begin(cfg::MAIN_HOSTNAME)) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.printf("[MDNS] http://%s.local\n", cfg::MAIN_HOSTNAME);
+  } else {
+    Serial.println("[MDNS] No se pudo iniciar mDNS");
+  }
+  return true;
+}
+
+void logEvent(tt::EventAction action, int8_t toolId, const char* user,
+              const char* returnedBy, tt::EventSource source,
+              uint8_t confidence) {
+  tt::Event event{};
+  event.action = action;
+  event.toolId = toolId;
+  tt::slotForTool(toolId, event.slot);
+  event.source = source;
+  event.confidence = confidence;
+  event.bootId = tt::g_state.bootId;
+  event.uptimeMs = millis();
+  event.epoch = tt::timesync::nowEpoch();
+  event.timeValid = event.epoch > 0;
+  copyText(event.user, sizeof(event.user), user);
+  copyText(event.returnedBy, sizeof(event.returnedBy), returnedBy);
+
+  tt::storage.appendEvent(event);
+  tt::webserver::broadcastEvent(event);
+
+  Serial.printf("[EVT] %s %s user='%s' returnedBy='%s' epoch=%u\n",
+                tt::actionName(event.action), event.slot, event.user,
+                event.returnedBy, static_cast<unsigned>(event.epoch));
+}
+
+void scheduleAnalysis(uint32_t delayMs = cfg::CAMERA_SETTLE_MS) {
+  if (!cfg::FEATURE_CAMERA || !tt::storage.settings().cameraEnabled) return;
+  s_analysisPending = true;
+  s_analysisDue = millis() + delayMs;
+}
+
+void handleRfid(const String& uid) {
+  const int index = tt::storage.findUserByUid(uid);
+  if (index >= 0 && tt::storage.users()[index].active) {
+    const tt::User& user = tt::storage.users()[index];
+    tt::stateSetSession(user.name, user.uid);
+    s_sessionStart = millis();
+
+    tt::actuators::unlock(cfg::LOCK_PULSE_MS);
+    tt::actuators::ledStripOn(cfg::LED_STRIP_ON_MS);
+
+    Serial.printf("[RFID] Acceso autorizado: %s\n", user.name);
+    logEvent(tt::ACTION_ACCESS_GRANTED, -1, user.name, "", tt::SOURCE_RFID, 0);
+
+    tt::webserver::broadcastSnapshot();
+    scheduleAnalysis();
+    return;
+  }
+
+  const String unknown = "UID " + uid;
+  tt::actuators::denyAlert();
+  Serial.printf("[RFID] Acceso denegado: %s\n", uid.c_str());
+  logEvent(tt::ACTION_ACCESS_DENIED, -1, unknown.c_str(), "", tt::SOURCE_RFID,
+           0);
+  tt::webserver::broadcastAlert("access_denied", -1);
+}
+
+void handleIrChange(const tt::ir::Change& change) {
+  const uint8_t toolId = change.toolId;
+  tt::ToolRuntime& runtime = tt::g_state.tools[toolId];
+
+  char previousOwner[tt::NAME_MAX_LEN];
+  copyText(previousOwner, sizeof(previousOwner), runtime.owner);
+
+  if (!change.present) {
+    const char* owner =
+        tt::stateHasSession() ? tt::g_state.sessionUser : "Sin sesión";
+    tt::stateSetToolPresent(toolId, false, owner, tt::timesync::nowEpoch());
+    logEvent(tt::ACTION_TAKEN, toolId, owner, "", tt::SOURCE_IR, 0);
+
+    if (!tt::stateHasSession()) {
+      tt::actuators::denyAlert();
+      tt::webserver::broadcastAlert("taken_without_session", toolId);
+    }
+  } else {
+    const char* returnedBy =
+        tt::stateHasSession() ? tt::g_state.sessionUser : "Sin sesión";
+    tt::stateSetToolPresent(toolId, true, nullptr, 0);
+    logEvent(tt::ACTION_RETURNED, toolId,
+             previousOwner[0] != '\0' ? previousOwner : "Sin sesión",
+             returnedBy, tt::SOURCE_IR, 0);
+  }
+
+  if (tt::stateHasSession()) s_sessionStart = millis();
+
+  tt::webserver::broadcastToolChange(toolId);
+  scheduleAnalysis();
+}
+
+void handleCameraResult() {
+  s_analysisPending = false;
+
+  if (!tt::storage.settings().cameraEnabled) return;
+
+  // La tira blanca ayuda a la cámara y se apaga sola por timeout.
+  tt::actuators::ledStripOn(cfg::LED_STRIP_ON_MS);
+
+  tt::camera_link::AnalysisResult result;
+  if (!tt::camera_link::analyze(result)) {
+    Serial.println("[CAM] Análisis no disponible; decide el IR");
+    if (!s_cameraOfflineLogged) {
+      logEvent(tt::ACTION_CAMERA_OFFLINE, -1, "Sistema", "", tt::SOURCE_SYSTEM,
+               0);
+      s_cameraOfflineLogged = true;
+    }
+    tt::webserver::broadcastCameraStatus();
+    return;
+  }
+
+  s_cameraOfflineLogged = false;
+
+  bool mismatch = false;
+  for (uint8_t i = 0; i < tt::TOOL_COUNT; i++) {
+    if (!tt::g_state.tools[i].known) continue;
+
+    const tt::camera_link::AnalysisSlot& slot = result.slots[i];
+    if (slot.confidence < cfg::CAMERA_MIN_CONFIDENCE) continue;
+
+    const bool irPresent = tt::g_state.tools[i].present;
+    if (slot.present != irPresent) {
+      logEvent(tt::ACTION_MISMATCH, static_cast<int8_t>(i), "Sistema", "",
+               tt::SOURCE_CAMERA, slot.confidence);
+      tt::webserver::broadcastAlert("ir_camera_mismatch",
+                                    static_cast<int8_t>(i));
+      mismatch = true;
+      continue;
+    }
+
+    if (slot.present && slot.predictedTool >= 0 &&
+        slot.predictedTool != i) {
+      logEvent(tt::ACTION_MISMATCH, static_cast<int8_t>(i), "Sistema", "",
+               tt::SOURCE_CAMERA, slot.confidence);
+      tt::webserver::broadcastAlert("tool_wrong_slot",
+                                    static_cast<int8_t>(i));
+      mismatch = true;
+    }
+  }
+
+  if (mismatch) tt::actuators::denyAlert();
+
+  tt::camera_link::fetchPhoto();
+
+  // Refrescar en la web la confianza y la lectura de cámara de cada ranura.
+  tt::webserver::broadcastSnapshot();
+  tt::webserver::broadcastCameraStatus();
+}
+
+void initPowerSense() {
+  if (!cfg::FEATURE_AC_SENSE) return;
+
+  pinMode(cfg::PIN_AC_SENSE, INPUT_PULLUP);
+  const bool high = digitalRead(cfg::PIN_AC_SENSE) == HIGH;
+  s_acRaw = cfg::AC_SENSE_ACTIVE_HIGH ? high : !high;
+  s_acStable = s_acRaw;
+  s_acRawChanged = millis();
+  tt::g_state.acPresent = s_acStable;
+  Serial.printf("[POWER] Red %s\n", s_acStable ? "presente" : "ausente");
+}
+
+void pollPowerSense() {
+  if (!cfg::FEATURE_AC_SENSE) return;
+
+  const bool high = digitalRead(cfg::PIN_AC_SENSE) == HIGH;
+  const bool present = cfg::AC_SENSE_ACTIVE_HIGH ? high : !high;
+  const uint32_t now = millis();
+
+  if (present != s_acRaw) {
+    s_acRaw = present;
+    s_acRawChanged = now;
+  }
+
+  if (s_acRaw != s_acStable && (now - s_acRawChanged) >= 500) {
+    s_acStable = s_acRaw;
+    tt::g_state.acPresent = s_acStable;
+
+    if (s_acStable) {
+      logEvent(tt::ACTION_POWER_RESTORED, -1, "Sistema", "", tt::SOURCE_SYSTEM,
+               0);
+      tt::webserver::broadcastSnapshot();
+      Serial.println("[POWER] Red restaurada");
+    } else {
+      logEvent(tt::ACTION_POWER_LOST, -1, "Sistema", "", tt::SOURCE_SYSTEM, 0);
+      tt::webserver::broadcastAlert("power_lost", -1);
+      Serial.println("[POWER] Corte de red; operando con UPS");
+    }
+  }
 }
 
 void printHeartbeat() {
   Serial.printf(
-      "[HB] uptime=%lus heap=%u min_heap=%u psram=%u wifi=%d rssi=%d\n",
+      "[HB] uptime=%lus heap=%u min_heap=%u psram=%u wifi=%d rssi=%d "
+      "session='%s' camera=%d events=%u ac=%d\n",
       static_cast<unsigned long>(millis() / 1000),
       static_cast<unsigned>(ESP.getFreeHeap()),
       static_cast<unsigned>(ESP.getMinFreeHeap()),
       static_cast<unsigned>(ESP.getFreePsram()),
-      static_cast<int>(WiFi.status()), WiFi.RSSI());
+      static_cast<int>(WiFi.status()), WiFi.RSSI(), tt::g_state.sessionUser,
+      tt::g_state.cameraOnline, static_cast<unsigned>(tt::storage.eventCount()),
+      tt::g_state.acPresent);
 }
 
 }  // namespace
@@ -100,23 +318,104 @@ void setup() {
   delay(300);
   printBanner();
 
-  configureSafeOutputs();
-  mountStorage();
-
-  if (strlen(SECRET_DEFAULT_ADMIN_PASSWORD) == 0) {
-    Serial.println("[ADMIN] ADVERTENCIA: contraseña inicial vacía");
-  } else {
-    Serial.println("[ADMIN] Contraseña inicial configurada");
+  if (!mountStorage()) {
+    Serial.println("[FS] Continuando sin LittleFS; el histórico no funcionará");
   }
 
+  tt::stateInit();
+  tt::g_state.bootId = esp_random();
+  Serial.printf("[BOOT] bootId=%s\n", String(tt::g_state.bootId, HEX).c_str());
+
+  if (!tt::storage.begin(SECRET_DEFAULT_ADMIN_PASSWORD)) {
+    Serial.println("[STORAGE] Error fatal; reinicio en 5 s");
+    delay(5000);
+    ESP.restart();
+  }
+
+  tt::actuators::begin();
+  tt::ir::begin();
+  initPowerSense();
+
+  for (uint8_t i = 0; i < tt::TOOL_COUNT; i++) {
+    tt::stateSetToolPresent(i, tt::ir::readPresent(i), "", 0);
+  }
+
+  tt::rfid::begin();
+
   connectWiFi();
+  tt::timesync::begin();
+  tt::webserver::begin();
+
   printHeartbeat();
 }
 
 void loop() {
   const uint32_t now = millis();
-  if (now - lastHeartbeat >= HEARTBEAT_MS) {
-    lastHeartbeat = now;
+
+  tt::timesync::update();
+  tt::actuators::update();
+  tt::webserver::loop();
+  pollPowerSense();
+
+  tt::ir::Change change;
+  if (tt::ir::poll(change)) {
+    handleIrChange(change);
+  }
+
+  const String uid = tt::rfid::poll();
+  if (uid.length() > 0) {
+    handleRfid(uid);
+  }
+
+  // Cierre de sesión por inactividad (opcional).
+  const uint16_t timeout = tt::storage.settings().sessionTimeoutMin;
+  if (timeout > 0 && tt::stateHasSession()) {
+    const uint32_t limit = static_cast<uint32_t>(timeout) * 60UL * 1000UL;
+    if (now - s_sessionStart >= limit) {
+      Serial.printf("[SESSION] Cerrando sesión de '%s'\n",
+                    tt::g_state.sessionUser);
+      tt::stateClearSession();
+      tt::webserver::broadcastSnapshot();
+    }
+  }
+
+  if (tt::webserver::consumeForceAnalysis()) {
+    scheduleAnalysis(50);
+  }
+
+  if (s_analysisPending && !s_analysisRunning &&
+      static_cast<int32_t>(now - s_analysisDue) >= 0) {
+    s_analysisRunning = true;
+    handleCameraResult();
+    s_analysisRunning = false;
+  }
+
+  if (cfg::FEATURE_CAMERA && tt::storage.settings().cameraEnabled &&
+      (now - s_lastCameraHealth) >= CAMERA_HEALTH_MS) {
+    s_lastCameraHealth = now;
+    if (tt::camera_link::health()) s_cameraOfflineLogged = false;
+    tt::webserver::broadcastCameraStatus();
+  }
+
+  if (now - s_lastHeartbeat >= HEARTBEAT_MS) {
+    s_lastHeartbeat = now;
     printHeartbeat();
   }
+
+  if (tt::webserver::consumeWifiResetRequest()) {
+    Serial.println("[SYS] Borrando credenciales WiFi desde la web");
+    WiFiManager wifiManager;
+    wifiManager.resetSettings();
+    delay(300);
+    ESP.restart();
+  }
+
+  if (tt::webserver::consumeRestartRequest()) {
+    Serial.println("[SYS] Reinicio solicitado desde la web");
+    delay(300);
+    ESP.restart();
+  }
+
+  // Evita que el watchdog se queje en bucles muy activos.
+  delay(2);
 }

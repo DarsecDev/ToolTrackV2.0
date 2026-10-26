@@ -1,5 +1,21 @@
 # Arquitectura
 
+## Estado de implementación
+
+La Fase 1 está implementada y compila para la placa maestra. El nodo de visión
+es la Fase 2: el cliente HTTP de la maestra existe, pero el firmware de la XIAO
+todavía solo inicializa la cámara y captura un frame de prueba.
+
+| Componente | Estado |
+|---|---|
+| Placa maestra | Implementada; pendiente validar en hardware |
+| Web, API REST y WebSocket | Implementados y probados con API simulada |
+| RFID, 12 IR y actuadores | Implementados; pendiente validar en hardware |
+| Cliente de cámara y foto | Implementado; pendiente el nodo real |
+| Nodo de visión | Fase 2 |
+| Telegram | No implementado |
+| OTA | No implementado; actualización por USB |
+
 ## Nodos
 
 ### Placa maestra — ESP32-S3-DevKitC-1 N16R8
@@ -11,23 +27,25 @@ Responsabilidades:
 - Controlar la cerradura de 12 V, los LEDs, el buzzer y la tira LED.
 - Mantener la sesión del usuario activo y registrar eventos.
 - Servir la web, la API REST y el WebSocket.
-- Sincronizar la hora por NTP y reconstruir eventos.
+- Sincronizar la hora por NTP y reconstruir eventos del arranque actual.
 - Orquestar la captura y el análisis del nodo de visión.
-- Enviar notificaciones por Telegram (opcional).
+- Detectar el corte de red si la PCB entrega la señal (función desactivada).
+- Enviar notificaciones por Telegram (previsto, no implementado).
 
 ### Nodo de visión — XIAO ESP32-S3 Sense
 
-Responsabilidades:
+Responsabilidades objetivo:
 
 - Inicializar la cámara OV2640.
-- Recibir la orden de análisis por HTTP.
+- Exponer `/health`, `/latest.jpg` y `/analyze`.
 - Capturar un frame, recortar las 12 zonas y ejecutar el modelo.
 - Devolver el resultado en JSON y conservar la última foto.
-- Exponer `/latest.jpg`, `/latest.json` y `/health`.
+- Reportar presencia, herramienta predicha, confianza y caja por ranura.
 
 La comunicación es **WiFi/HTTP** porque la placa maestra no tiene GPIO libres
 suficientes para un UART dedicado sin sacrificar los 12 IR. El nodo de visión
-no controla actuadores.
+no controla actuadores. En la Fase 1 el cliente de la maestra ya resuelve
+`tooltrack-cam.local` por mDNS y usa `http://tooltrack-cam.local` como respaldo.
 
 ## Flujo de una operación
 
@@ -38,15 +56,17 @@ no controla actuadores.
    - **Denegado:** parpadea el LED rojo y el buzzer; registra el intento.
 3. Los cambios de los IR generan eventos de tomada o devolución tras el
    antirrebote.
-4. Cuando el RFID se validó y los IR llevan `IR_STABLE_MS` sin cambios, la
-   placa maestra pide `POST /analyze` al nodo de visión.
+4. Cuando los IR llevan `IR_STABLE_MS` sin cambios, la placa maestra pide
+   `POST /analyze` al nodo de visión. También se puede forzar desde la web.
 5. El nodo captura, clasifica las 12 zonas y responde con presencia,
    identificación y confianza por ranura.
 6. La placa maestra compara IR y cámara:
-   - Coinciden: actualiza el estado.
-   - Discrepan: **gana el IR** y se registra una alerta.
-7. Se guarda el evento, se actualiza la web por WebSocket y, si está activo,
-   se envía un mensaje de Telegram.
+   - Coinciden: actualiza el estado y la confianza.
+   - Discrepan: **gana el IR**; se registra una discrepancia, se alerta en la
+     web y se activa la alerta física.
+7. Se guarda el evento y se actualiza la web por WebSocket.
+8. Si la cámara está disponible, se descarga la última foto y se muestra con
+   las cajas de las 12 ranuras.
 
 ## Tiempo y energía
 
@@ -54,25 +74,32 @@ no controla actuadores.
 - Cada evento guarda `bootId`, `uptimeMs` y `epoch` (puede ser nulo).
 - Si el router se cae, el sistema sigue funcionando con IR y guarda `uptimeMs`.
 - Al volver la red y sincronizar NTP, se calcula el instante de arranque
-  (`bootEpoch = now - uptime`) y se reconstruye la hora de los eventos de esa
-  sesión.
-- Tras un apagón total (fuera del UPS), los eventos nuevos quedan marcados
-  como hora desconocida hasta la próxima sincronización.
+  (`bootEpoch = now - uptime`) y se reconstruyen los eventos de **ese mismo
+  arranque**.
+- Si hay un apagón total antes de sincronizar, los eventos de ese arranque
+  quedan sin hora absoluta: no se conserva un ancla de tiempo entre reinicios.
+- La detección de red presente usa GPIO41 con optoacoplador. Está implementada
+  pero desactivada (`FEATURE_AC_SENSE=false`) hasta que la PCB entregue la señal.
+- El router no está en el UPS. Durante un corte se pierden web, cámara, NTP y
+  Telegram; RFID, IR, cerradura, LEDs e historial local siguen.
 
 ## Modo degradado
 
 | Falla | Efecto | Mitigación |
 |---|---|---|
-| Sin router | Web, cámara, NTP y Telegram no disponibles | IR, cerradura e histórico local siguen |
+| Sin router | Web, cámara y NTP no disponibles | IR, cerradura e historial local siguen |
 | Sin cámara | No hay verificación visual | IR decide; la web muestra cámara offline |
 | Sin UPS | El equipo se apaga | Al arrancar, los IR se leen sin generar eventos falsos |
 | Sin tarjeta válida | No se abre la cerradura | Se registra el intento denegado |
+| Cámara discrepa del IR | La identificación visual no es confiable | Gana el IR y se alerta |
 
 ## Almacenamiento
 
 | Dato | Medio | Formato |
 |---|---|---|
-| WiFi, contraseña admin, ajustes | NVS | clave/valor |
+| WiFi | NVS (WiFiManager) | credenciales |
+| Contraseña de administrador | NVS | salt + hash PBKDF2 + flag de cambio |
+| Ajustes | LittleFS | `settings.json` |
 | Usuarios RFID | LittleFS | `users.json` |
 | Configuración de herramientas | LittleFS | `tools.json` |
 | Eventos | LittleFS | `events.jsonl` (rotación) |
@@ -80,25 +107,28 @@ no controla actuadores.
 | Web | LittleFS | `index.html`, `app.js`, `styles.css` |
 
 Los archivos JSON se escriben de forma atómica: primero a `.tmp`, luego
-`rename`. El histórico es un JSON Lines para permitir escrituras por
-añadidura y rotación sin reescribir todo.
+`rename`. El histórico es JSON Lines para permitir escrituras por añadidura y
+rotación sin reescribir todo. En RAM se mantiene un búfer circular en PSRAM con
+los eventos más recientes.
 
-## Módulos previstos (Fase 1)
+## Módulos implementados
 
 ```
 src/main/
-├── main.cpp
-├── storage.*        # NVS, LittleFS, eventos, rotación
-├── wifi_setup.*     # WiFiManager + mDNS
-├── time_sync.*      # NTP y reconstrucción
-├── rfid.*           # RC522, usuarios, sesión
-├── ir_sensors.*     # antirrebote y estados
-├── actuators.*      # cerradura, LEDs, buzzer, tira LED
+├── main.cpp         # arranque, RFID, IR, sesión, energía y cámara
+├── types.h          # usuarios, herramientas, ajustes y eventos
+├── state.*          # estado en RAM de sesión y herramientas
+├── storage.*        # NVS, LittleFS, usuarios, tools, eventos y auth
+├── time_sync.*      # NTP, epoch y reconstrucción
+├── rfid.*           # RC522 y UID
+├── ir_sensors.*     # antirrebote y flancos
+├── actuators.*      # cerradura, LEDs, buzzer y tira LED
 ├── camera_link.*    # cliente HTTP del nodo de visión
-├── webserver.*      # REST, WebSocket, auth
-├── telegram.*       # notificaciones
-└── event_log.*      # modelo de eventos
+└── webserver.*      # REST, WebSocket, auth y archivos estáticos
 ```
+
+`src/camera/` contiene por ahora la inicialización de cámara y una captura de
+prueba. La Fase 2 añadirá el servidor HTTP, las ROI y el modelo.
 
 ## Decisiones de diseño
 
@@ -107,7 +137,10 @@ src/main/
 | ESP32-S3 N16R8 | GPIO y PSRAM suficientes; USB nativo |
 | Cámara por WiFi | El DevKit clásico no tenía pines; el S3 tampoco necesita UART |
 | IR + cámara | El IR es rápido y confiable; la cámara aporta identidad |
+| Gana el IR | La presencia física es más confiable que una inferencia con poca luz |
 | LittleFS en vez de SPIFFS | SPIFFS está obsoleto y es propenso a corrupción |
 | Web en `data/` | Editable sin recompilar el firmware |
 | WebSocket | Actualización en vivo sin polling agresivo |
 | Sesión por usuario | Flujo simple: el último RFID válido queda activo |
+| Historial en PSRAM | Evita desgastar la flash en cada evento y acelera la web |
+| Sin RTC | NTP es suficiente para la expo; se documenta la limitación |

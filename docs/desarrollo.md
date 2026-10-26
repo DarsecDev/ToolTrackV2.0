@@ -44,9 +44,16 @@ pio device monitor -e camera
 pio run -e main -t buildfs
 pio run -e main -t uploadfs
 
+# Verificar sintaxis de la web sin flashear
+node --check data/app.js
+
 # Limpiar
 pio run -e main -t clean
 ```
+
+> `src/camera/` todavía es una prueba de cámara de la Fase 2: inicializa el
+> sensor y captura un frame, pero no levanta el servidor HTTP. Por eso
+> `pio run -e camera` compila y `ENABLE_WIFI=false` por ahora.
 
 Scripts de apoyo:
 
@@ -64,7 +71,8 @@ Scripts de apoyo:
 
 ## Particiones
 
-- `partitions/main_16mb.csv`: 2 apps de 4 MB (OTA) + ~7.9 MB LittleFS.
+- `partitions/main_16mb.csv`: 2 apps de 4 MB (layout compatible con OTA, aunque
+  OTA está desactivado) + ~7.9 MB LittleFS.
 - `partitions/camera_8mb.csv`: app de 4 MB + ~3.9 MB LittleFS.
 
 Si se cambia el esquema de particiones, actualizar también

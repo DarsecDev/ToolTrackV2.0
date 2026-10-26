@@ -2,6 +2,32 @@
 
 Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 
+## Estado actual
+
+- **Fase 0 — completada:** repositorio local, PlatformIO con entornos `main` y
+  `camera`, particiones, pinout, web base y documentación.
+- **Fase 1 — completada en firmware y web:** almacenamiento, RFID, 12 IR,
+  actuadores, cliente de cámara, API REST, WebSocket, autenticación, panel de
+  administración, histórico, exportación CSV, NTP y reconstrucción de hora.
+- **Compilación verificada:** `pio run -e main` y `pio run -e camera`.
+  `pio run -e main -t buildfs` genera la imagen de LittleFS.
+- **UI verificada con API simulada:** matriz 4x3, histórico, login, cambio
+  obligatorio de contraseña, usuarios, herramientas, ajustes, sistema y visor
+  de foto con cajas de la cámara. Sin errores de JavaScript en Chromium.
+- **Pendiente de hardware:** XIAO ESP32-S3 Sense, placa maestra, PCB, tira LED,
+  sensores y UPS. La lógica de campo no se ha probado todavía en el armario.
+- **Pendiente de Fase 2:** firmware del nodo de visión, calibración de ROI,
+  dataset, modelo Edge Impulse e inferencia real.
+- **Pendiente administrativo:** crear el repositorio remoto en GitHub y hacer
+  el primer push.
+
+### Ruta crítica
+
+1. Pedir la XIAO ESP32-S3 Sense y confirmar los componentes del PCB.
+2. Terminar el nodo de visión y validarlo con la cámara real.
+3. Montar el armario, calibrar las 12 ROI y recolectar el dataset.
+4. Integrar el modelo y ensayar la demo completa.
+
 ## Día 0 — Fase 0: base del proyecto
 
 - [x] Repositorio Git local.
@@ -11,36 +37,41 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] Esqueletos de firmware compilables.
 - [x] Web base en `data/`.
 - [x] Documentación inicial.
-- [ ] Verificar compilación de ambos entornos.
+- [x] Verificar compilación de ambos entornos.
 - [ ] Crear repositorio remoto en GitHub y primer push.
 - [ ] Confirmar pedido de XIAO, tira LED y mini UPS.
 
 ## Día 1 — Núcleo de almacenamiento y configuración
 
-- [ ] `storage`: NVS, LittleFS, escritura atómica de JSON.
-- [ ] `users.json`, `tools.json`, `settings.json` con valores por defecto.
-- [ ] `events.jsonl` con rotación a 1000 eventos.
-- [ ] Estructura de eventos con `bootId`, `uptimeMs` y `epoch`.
-- [ ] Pruebas unitarias de rotación y serialización (host o serial).
+- [x] `storage`: NVS, LittleFS, escritura atómica de JSON.
+- [x] `users.json`, `tools.json`, `settings.json` con valores por defecto.
+- [x] `events.jsonl` con rotación al límite configurado (hasta 1000).
+- [x] Estructura de eventos con `bootId`, `uptimeMs` y `epoch`.
+- [x] Historial en PSRAM con respaldo en LittleFS.
+- [ ] Pruebas unitarias de rotación y serialización en host o serial.
+      La rotación está implementada y compila; falta la prueba automatizada.
 
 ## Día 2 — RFID, IR y actuadores
 
-- [ ] `rfid`: lectura RC522, UID a hexadecimal, búsqueda de usuario.
-- [ ] `ir_sensors`: antirrebote, detección de flancos, estado inicial sin
+- [x] `rfid`: lectura RC522, UID a hexadecimal, búsqueda de usuario.
+- [x] `ir_sensors`: antirrebote, detección de flancos, estado inicial sin
       eventos falsos.
-- [ ] `actuators`: cerradura, LED verde/rojo, buzzer y tira LED no
+- [x] `actuators`: cerradura, LED verde/rojo, buzzer y tira LED no
       bloqueantes.
-- [ ] Sesión de usuario y registro de accesos.
-- [ ] Manejo de herramienta tomada sin sesión.
+- [x] Sesión de usuario y registro de accesos.
+- [x] Manejo de herramienta tomada sin sesión.
+- [ ] Validar tiempos, polaridades y consumo con el hardware real.
 
 ## Día 3 — Web, API y tiempo
 
-- [ ] `webserver`: `/api/status`, `/api/tools`, `/api/events`, `/api/photo`.
-- [ ] WebSocket con snapshot y eventos.
-- [ ] Autenticación de administrador y CRUD de usuarios.
-- [ ] Configuración de herramientas y exportación CSV.
-- [ ] NTP y reconstrucción de la hora al reconectar.
-- [ ] Interfaz web conectada a datos reales.
+- [x] `webserver`: `/api/status`, `/api/tools`, `/api/events`, `/api/photo`.
+- [x] WebSocket con snapshot y eventos.
+- [x] Autenticación de administrador y CRUD de usuarios.
+- [x] Configuración de herramientas y exportación CSV.
+- [x] NTP y reconstrucción de la hora al reconectar.
+- [x] Interfaz web conectada a datos reales.
+- [x] Contraseña inicial `tooltrack` con cambio obligatorio.
+- [x] Bloqueo temporal tras cinco intentos fallidos.
 
 ## Día 4 — Nodo de visión: puesta en marcha
 
@@ -68,24 +99,26 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 
 ## Día 7 — Integración completa
 
-- [ ] `camera_link` en la placa maestra.
-- [ ] Disparo tras RFID + IR estable.
-- [ ] Descarga de la última foto y metadatos.
-- [ ] Comparación IR/cámara y alertas de discrepancia.
-- [ ] Superposición de cajas en la web.
+- [x] `camera_link` en la placa maestra (cliente HTTP + mDNS).
+- [x] Disparo tras RFID + IR estable, con reintento por cambio de IR.
+- [x] Descarga de la última foto y metadatos.
+- [x] Comparación IR/cámara y alertas de discrepancia.
+- [x] Superposición de cajas en la web.
+- [ ] Validar la integración con la XIAO y la cámara físicas.
 
 ## Día 8 — Robustez y extras
 
-- [ ] Estado de hardware en la web (uptime, heap, RSSI, cámara).
-- [ ] Recuperación ante fallos de cámara o WiFi.
-- [ ] Pruebas de tomada/devolución y de ranura incorrecta.
+- [x] Estado de hardware en la web (uptime, heap, PSRAM, RSSI, cámara).
+- [x] Recuperación ante fallos de cámara o WiFi (modo degradado).
+- [x] Historial local aunque no haya router.
+- [ ] Pruebas de tomada/devolución y de ranura incorrecta en hardware.
 - [ ] Telegram si el tiempo lo permite (primera función a recortar).
-- [ ] Optimización de memoria y tiempos.
+- [x] Optimización básica de memoria: historial en PSRAM y búfer circular.
 
 ## Día 9 — Documentación y ensayo
 
-- [ ] Completar `docs/` y README.
-- [ ] Manual de operación y guion de demo.
+- [x] Documentación de arquitectura, hardware, API y operación de Fase 1.
+- [ ] Completar el guion de demo y el manual de mantenimiento final.
 - [ ] Prueba completa de 30 minutos con usuarios reales.
 - [ ] Exportar binarios y crear release `v1.0.0`.
 - [ ] Ensayo de la presentación.
@@ -110,3 +143,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 8. El sistema arranca sin generar eventos falsos.
 9. La hora de los eventos se reconstruye al volver la red.
 10. La demo funciona sin intervención manual durante 30 minutos.
+
+Los criterios 1–5 y 8–9 están implementados en firmware y web, pero deben
+confirmarse con el armario físico. Los criterios 6–7 dependen de la Fase 2 y
+del entrenamiento del modelo. El criterio 10 requiere el ensayo final.

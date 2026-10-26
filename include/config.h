@@ -77,6 +77,7 @@ constexpr char     CAMERA_BASE_URL[]   = "http://tooltrack-cam.local";
 constexpr uint16_t CAMERA_HTTP_PORT    = 80;
 constexpr uint32_t CAMERA_TIMEOUT_MS   = 8000;
 constexpr uint32_t CAMERA_SETTLE_MS    = 1500;  // espera de IR estable antes de capturar
+constexpr uint8_t  CAMERA_MIN_CONFIDENCE = 60;  // porcentaje mínimo para validar
 
 // ------------------------------------------------------------
 //  Almacenamiento
@@ -94,7 +95,8 @@ constexpr char     LAST_RESULT_FILE[] = "/last_result.json";
 // ------------------------------------------------------------
 constexpr bool FEATURE_TELEGRAM = false;  // se activa cuando haya tiempo
 constexpr bool FEATURE_AC_SENSE = false;  // requiere hardware del PCB
-constexpr bool FEATURE_OTA      = true;
+constexpr bool AC_SENSE_ACTIVE_HIGH = true;  // HIGH = red presente
+constexpr bool FEATURE_OTA      = false;  // actualización por USB en esta versión
 
 // ------------------------------------------------------------
 //  Seguridad

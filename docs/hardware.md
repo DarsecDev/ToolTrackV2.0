@@ -18,6 +18,11 @@
 | Corte de red (opcional) | 41 | Optoacoplador, entrada digital |
 | Libres | 38, 42, 48 | Reserva (38/48 pueden ser RGB onboard) |
 
+> La entrada GPIO41 está implementada en el firmware, pero desactivada con
+> `FEATURE_AC_SENSE=false` hasta que la PCB entregue la señal. Se asume
+> `HIGH = red presente` (`AC_SENSE_ACTIVE_HIGH=true`). No bloquea la cerradura:
+> solo registra `power_lost` / `power_restored` y alerta en la web.
+
 ### Pines prohibidos
 
 | GPIO | Motivo |
@@ -74,8 +79,9 @@ Red eléctrica
 
 > El mini UPS de 12 V / 2 A queda al límite durante el pulso de la cerradura.
 > Recomendación para el diseño de PCB: usar una tira LED de bajo consumo,
-> activar la cerradura solo con red presente y añadir un capacitor de reserva
-> en la línea de 12 V.
+> añadir un capacitor de reserva en la línea de 12 V y, si se implementa el
+> corte de red, evaluar bloquear la cerradura con red ausente. El firmware
+> actual **no** bloquea la cerradura; solo registra el evento.
 
 ## Componentes
 
@@ -99,8 +105,9 @@ Red eléctrica
 1. Cerradura y tira LED a 12 V con MOSFET y protecciones (diodo de rueda libre
    en la cerradura).
 2. Buck 12→5 V con capacidad ≥2 A para las dos placas.
-3. Conector para el mini UPS y, si es posible, señal de “red presente” hacia
-   GPIO 41 mediante optoacoplador.
+3. Conector para el mini UPS y señal de “red presente” hacia GPIO 41 mediante
+   optoacoplador (3.3 V, activa en alto). Es necesaria para habilitar
+   `FEATURE_AC_SENSE`.
 4. Borneras o conectores para los 12 IR y el RC522.
 5. Reservar GPIO 38/42/48 para futuras señales.
 6. No conectar nada a GPIO 19/20/26–37/43/44.

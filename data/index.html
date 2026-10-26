@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0b1120">
   <title>ToolTrack — Control de herramientas</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
@@ -21,25 +21,35 @@
       <div class="topbar-meta">
         <span class="badge" id="firmwareVersion">v0.1.0</span>
         <span class="badge badge-muted" id="clock">--:--:--</span>
+        <span class="badge badge-ok" id="liveBadge">En vivo</span>
       </div>
     </header>
 
     <section class="status-row" aria-label="Estado del sistema">
       <article class="status-card">
         <span class="status-label">Sistema</span>
-        <span class="status-value" id="statusSystem">Fase 0</span>
+        <span class="status-value" id="statusSystem">Conectando…</span>
+        <span class="status-detail" id="statusUptime">—</span>
       </article>
       <article class="status-card">
         <span class="status-label">WiFi</span>
         <span class="status-value" id="statusWifi">Sin datos</span>
+        <span class="status-detail" id="statusIp">—</span>
       </article>
       <article class="status-card">
         <span class="status-label">Cámara</span>
         <span class="status-value" id="statusCamera">Sin datos</span>
+        <span class="status-detail" id="statusCameraDetail">—</span>
       </article>
       <article class="status-card">
         <span class="status-label">Herramientas fuera</span>
-        <span class="status-value" id="statusTaken">0 / 12</span>
+        <span class="status-value" id="statusTaken">— / 12</span>
+        <span class="status-detail" id="statusTakenDetail">—</span>
+      </article>
+      <article class="status-card">
+        <span class="status-label">Sesión activa</span>
+        <span class="status-value" id="statusSession">Sin sesión</span>
+        <span class="status-detail" id="statusTime">Hora: —</span>
       </article>
     </section>
 
@@ -50,13 +60,19 @@
     </nav>
 
     <main>
+      <!-- ============================================================
+           ARMARIO
+           ============================================================ -->
       <section class="panel tab-panel is-active" id="tab-cabinet">
         <div class="panel-head">
           <div>
             <h2>Estado del armario</h2>
             <p>Matriz 4x3 · sensores IR + verificación por cámara</p>
           </div>
-          <button class="button button-ghost" id="refreshButton" type="button">Actualizar</button>
+          <div class="toolbar">
+            <span class="muted small" id="lastUpdate">Actualizando…</span>
+            <button class="button button-ghost" id="refreshButton" type="button">Actualizar</button>
+          </div>
         </div>
 
         <div class="cabinet-grid" id="cabinetGrid" aria-live="polite"></div>
@@ -65,22 +81,80 @@
           <span><i class="dot dot-present"></i> Presente</span>
           <span><i class="dot dot-missing"></i> Fuera</span>
           <span><i class="dot dot-unknown"></i> Sin datos</span>
+          <span><i class="dot dot-camera"></i> Verificado por cámara</span>
+        </div>
+
+        <div class="photo-section">
+          <div class="panel-head panel-head-tight">
+            <div>
+              <h3>Última verificación visual</h3>
+              <p id="photoMeta">Sin análisis disponible</p>
+            </div>
+            <button class="button button-ghost" id="refreshPhotoButton" type="button">Ver foto</button>
+          </div>
+          <div class="photo-wrap" id="photoWrap">
+            <img id="lastPhoto" alt="Última foto del armario" hidden>
+            <div class="photo-overlay" id="photoOverlay"></div>
+            <div class="photo-empty" id="photoEmpty">
+              La cámara todavía no ha enviado una imagen.
+            </div>
+          </div>
         </div>
       </section>
 
+      <!-- ============================================================
+           HISTÓRICO
+           ============================================================ -->
       <section class="panel tab-panel" id="tab-history">
         <div class="panel-head">
           <div>
             <h2>Histórico de uso</h2>
-            <p>Próximamente: filtros por herramienta, usuario y fecha.</p>
+            <p>Últimos movimientos registrados por IR, RFID y cámara.</p>
+          </div>
+          <div class="toolbar">
+            <button class="button button-ghost" id="historyRefreshButton" type="button">Actualizar</button>
           </div>
         </div>
-        <div class="empty-state">
-          <strong>En construcción</strong>
-          <span>El histórico se conectará en la Fase 1.</span>
+
+        <div class="filters">
+          <label class="field field-inline">
+            <span>Buscar</span>
+            <input id="historySearch" type="search" placeholder="Usuario, ranura o acción…" autocomplete="off">
+          </label>
+          <label class="field field-inline">
+            <span>Herramienta</span>
+            <select id="historyTool">
+              <option value="">Todas</option>
+            </select>
+          </label>
+          <span class="muted small" id="historyCount"></span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Ranura</th>
+                <th>Acción</th>
+                <th>Usuario</th>
+                <th>Devuelto por</th>
+                <th>Fuente</th>
+                <th>Conf.</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+
+        <div class="table-footer">
+          <button class="button button-ghost" id="historyMoreButton" type="button" disabled>Cargar más</button>
         </div>
       </section>
 
+      <!-- ============================================================
+           ADMINISTRACIÓN
+           ============================================================ -->
       <section class="panel tab-panel" id="tab-admin">
         <div class="panel-head">
           <div>
@@ -88,17 +162,200 @@
             <p>Usuarios RFID, configuración de herramientas y ajustes del sistema.</p>
           </div>
         </div>
-        <div class="empty-state">
-          <strong>En construcción</strong>
-          <span>El panel de administrador se habilitará en la Fase 1.</span>
+
+        <div class="auth-card" id="adminLogin">
+          <h3>Iniciar sesión</h3>
+          <p class="muted">Ingresa la contraseña de administrador. La contraseña inicial es <span class="mono">tooltrack</span> y debe cambiarse en el primer acceso.</p>
+          <form id="loginForm" class="form">
+            <label class="field">
+              <span>Contraseña</span>
+              <input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Contraseña">
+            </label>
+            <button class="button" type="submit" id="loginButton">Entrar</button>
+            <p class="form-error" id="loginError" role="alert"></p>
+          </form>
+        </div>
+
+        <div class="auth-card" id="adminChangePassword" hidden>
+          <h3>Cambio obligatorio de contraseña</h3>
+          <p class="muted">Por seguridad, cambia la contraseña inicial antes de continuar.</p>
+          <form id="changePasswordForm" class="form">
+            <label class="field">
+              <span>Contraseña actual</span>
+              <input id="currentPassword" type="password" required autocomplete="current-password">
+            </label>
+            <label class="field">
+              <span>Nueva contraseña</span>
+              <input id="newPassword" type="password" required minlength="4" autocomplete="new-password">
+            </label>
+            <label class="field">
+              <span>Confirmar nueva contraseña</span>
+              <input id="confirmPassword" type="password" required minlength="4" autocomplete="new-password">
+            </label>
+            <button class="button" type="submit">Cambiar contraseña</button>
+            <p class="form-error" id="changePasswordError" role="alert"></p>
+          </form>
+        </div>
+
+        <div id="adminContent" hidden>
+          <div class="admin-header">
+            <nav class="subnav" aria-label="Secciones de administración">
+              <button class="subtab is-active" data-admin="users" type="button">Usuarios</button>
+              <button class="subtab" data-admin="tools" type="button">Herramientas</button>
+              <button class="subtab" data-admin="settings" type="button">Ajustes</button>
+              <button class="subtab" data-admin="system" type="button">Sistema</button>
+            </nav>
+            <button class="button button-ghost" id="logoutButton" type="button">Cerrar sesión</button>
+          </div>
+
+          <!-- Usuarios -->
+          <div class="admin-panel is-active" id="admin-users">
+            <div class="panel-head panel-head-tight">
+              <div>
+                <h3>Usuarios RFID</h3>
+                <p>Alta, edición y baja de tarjetas autorizadas.</p>
+              </div>
+              <button class="button" id="addUserButton" type="button">Nuevo usuario</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>UID</th>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Creado</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="usersBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Herramientas -->
+          <div class="admin-panel" id="admin-tools">
+            <div class="panel-head panel-head-tight">
+              <div>
+                <h3>Configuración de herramientas</h3>
+                <p>Nombre visible y clase esperada del modelo de visión.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ranura</th>
+                    <th>Nombre</th>
+                    <th>Clase esperada</th>
+                    <th>Activa</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="toolsBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Ajustes -->
+          <div class="admin-panel" id="admin-settings">
+            <div class="panel-head panel-head-tight">
+              <div>
+                <h3>Ajustes del sistema</h3>
+                <p>Histórico, cámara, sesión y notificaciones.</p>
+              </div>
+            </div>
+            <form id="settingsForm" class="form form-grid">
+              <label class="field">
+                <span>Límite de eventos</span>
+                <input id="settingMaxEvents" type="number" min="50" max="1000" step="10" required>
+                <small>El cambio de tamaño del historial requiere reiniciar.</small>
+              </label>
+              <label class="field">
+                <span>Cierre de sesión por inactividad (min)</span>
+                <input id="settingSessionTimeout" type="number" min="0" max="1440" step="1">
+                <small>0 desactiva el cierre automático.</small>
+              </label>
+              <label class="checkbox">
+                <input id="settingCamera" type="checkbox">
+                <span>Verificación por cámara</span>
+              </label>
+              <label class="checkbox">
+                <input id="settingTelegram" type="checkbox">
+                <span>Notificaciones por Telegram (no implementado)</span>
+              </label>
+              <label class="field">
+                <span>Token del bot de Telegram</span>
+                <input id="settingTelegramToken" type="text" autocomplete="off" placeholder="Reservado para una versión futura">
+              </label>
+              <label class="field">
+                <span>Chat ID de Telegram</span>
+                <input id="settingTelegramChat" type="text" autocomplete="off" placeholder="Reservado para una versión futura">
+              </label>
+              <div class="form-actions">
+                <button class="button" type="submit">Guardar ajustes</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Sistema -->
+          <div class="admin-panel" id="admin-system">
+            <div class="panel-head panel-head-tight">
+              <div>
+                <h3>Sistema</h3>
+                <p>Diagnóstico y acciones de mantenimiento.</p>
+              </div>
+            </div>
+
+            <div class="info-grid" id="systemInfo"></div>
+
+            <div class="danger-zone">
+              <h4>Acciones</h4>
+              <div class="toolbar">
+                <button class="button button-ghost" id="forceAnalysisButton" type="button">Forzar análisis de cámara</button>
+                <a class="button button-ghost" href="/api/events/export.csv" download>Exportar histórico</a>
+                <button class="button button-danger" id="clearHistoryButton" type="button">Borrar histórico</button>
+                <button class="button button-danger" id="wifiResetButton" type="button">Borrar WiFi</button>
+                <button class="button button-danger" id="restartButton" type="button">Reiniciar equipo</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
 
     <footer class="footer">
-      <span>ToolTrack v2 · Fase 0</span>
+      <span>ToolTrack v2 · Fase 1</span>
       <span>ESP32-S3 + XIAO ESP32-S3 Sense</span>
     </footer>
   </div>
+
+  <dialog id="userDialog" class="dialog">
+    <form id="userForm" method="dialog" class="form">
+      <h3 id="userDialogTitle">Nuevo usuario</h3>
+      <input id="userId" type="hidden">
+      <label class="field">
+        <span>UID de la tarjeta</span>
+        <input id="userUid" type="text" required placeholder="Ej. 1A212828" autocomplete="off">
+        <small>Hexadecimal, sin espacios. Se aceptan 8 a 14 caracteres.</small>
+      </label>
+      <label class="field">
+        <span>Nombre</span>
+        <input id="userName" type="text" required maxlength="31" autocomplete="off">
+      </label>
+      <label class="checkbox">
+        <input id="userActive" type="checkbox" checked>
+        <span>Usuario activo</span>
+      </label>
+      <p class="form-error" id="userFormError" role="alert"></p>
+      <div class="form-actions">
+        <button class="button button-ghost" id="cancelUserButton" type="button">Cancelar</button>
+        <button class="button" type="submit">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>
