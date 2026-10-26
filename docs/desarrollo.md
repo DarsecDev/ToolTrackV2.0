@@ -15,8 +15,9 @@
 cp include/secrets.example.h include/secrets.h
 ```
 
-Editar `include/secrets.h` con la contraseña inicial y, si se usa, el token de
-Telegram. Ese archivo **no se sube** al repositorio.
+Editar `include/secrets.h` con la contraseña inicial. El token de Telegram
+existe como reserva, pero el envío no está implementado; déjalo vacío. Ese
+archivo **no se sube** al repositorio.
 
 ## Entornos
 

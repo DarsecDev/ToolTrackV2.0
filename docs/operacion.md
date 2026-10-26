@@ -1,8 +1,9 @@
 # Manual de operación
 
-> **Estado:** Fase 1 implementada. Este manual describe el comportamiento del
-> firmware y de la web actuales. La validación con el armario, la cerradura y la
-> cámara físicos está pendiente.
+> **Estado:** Fase 1 implementada; el nodo de visión ya expone HTTP, captura y
+> ROI, pero aún no tiene modelo de inferencia. Este manual describe el
+> comportamiento actual. La validación con el armario, la cerradura y la cámara
+> físicos está pendiente.
 
 ## Alcance
 
