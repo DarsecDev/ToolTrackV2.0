@@ -1,5 +1,10 @@
 # Visión artificial
 
+> **Estado:** el nodo de visión ya captura, expone `/analyze` y gestiona ROI.
+> El clasificador es un stub (`modelVersion="none"`): sin modelo devuelve las
+> 12 ranuras como desconocidas y confianza 0; no simula detecciones. La
+> identificación real queda pendiente del dataset y de Edge Impulse.
+
 ## Objetivo
 
 Con una sola cámara se deben responder dos preguntas por cada una de las 12
@@ -67,6 +72,10 @@ Total aproximado: **1.200–1.800 imágenes**. Con aumentos de datos
 1. Montar la cámara y la tira LED en su posición definitiva.
 2. Fijar la resolución y la calidad de JPEG.
 3. Ejecutar `tools/collect_dataset.py` con la etiqueta correspondiente.
+   El script descarga frames completos desde `/capture.jpg`; las etiquetas
+   `A1_empty`/`A1_tool_1` organizan la recolección por ranura, pero antes de
+   entrenar hay que recortar cada ROI y usar las clases finales
+   `empty`/`tool_1`…`tool_12`.
 4. Variar:
    - herramienta centrada, corrida, rotada;
    - luz ambiental y tira LED encendida/apagada;
@@ -101,10 +110,16 @@ normalizados (0–1) para que no dependan de la resolución:
 
 ```json
 {
-  "A1": [0.04, 0.05, 0.28, 0.27],
-  "A2": [0.37, 0.05, 0.28, 0.27]
+  "image_size": [1600, 1200],
+  "rois": {
+    "A1": [0.04, 0.05, 0.28, 0.27],
+    "A2": [0.37, 0.05, 0.28, 0.27],
+    "A3": [0.70, 0.05, 0.28, 0.27]
+  }
 }
 ```
+
+El archivo real debe contener las 12 claves A1…D3.
 
 Procedimiento:
 
@@ -123,6 +138,22 @@ Procedimiento:
 - El resultado incluye `bbox` en píxeles para que la web dibuje las cajas.
 - La última foto y el último JSON se guardan en LittleFS.
 - La placa maestra descarga la foto y la sirve en `/api/photo`.
+
+### Punto de integración del modelo
+
+El nodo ya separa la captura (`camera_vision.cpp`) de la inferencia
+(`camera_classifier.cpp`). Para integrar el modelo:
+
+1. Exportar la librería de Arduino desde Edge Impulse.
+2. Añadirla a `lib_deps` o a `lib/` para el entorno `camera`.
+3. Implementar `classifierAvailable()`, `modelName()`, `modelInputSize()` y
+   `classify()` en `src/camera/camera_classifier.cpp` usando `run_classifier()`.
+4. Mantener las etiquetas `empty` y `tool_1`…`tool_12`.
+5. Compilar y probar `/analyze` con el armario y las ROI reales.
+
+Mientras `classifierAvailable()` devuelva `false`, `camera_vision.cpp` no
+convierte el frame completo a RGB ni ejecuta inferencia; esto ahorra PSRAM y
+evita resultados falsos.
 
 ## Riesgos y mitigaciones
 

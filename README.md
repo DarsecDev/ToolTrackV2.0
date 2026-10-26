@@ -4,11 +4,10 @@ Armario inteligente de control de inventario de herramientas. Registra qué
 herramienta se toma, cuándo y quién la toma, y verifica la devolución con
 sensores infrarrojos y visión artificial.
 
-> **Estado:** Fase 1 implementada y compilada. La placa maestra, la API, el
-> WebSocket y el panel web están completos. El nodo de visión (XIAO ESP32-S3
-> Sense) es la siguiente fase: el cliente HTTP de la maestra ya está integrado,
-> pero el firmware del nodo todavía no expone `/analyze` ni `/latest.jpg`.
-> La validación en el armario físico está pendiente.
+> **Estado:** Fase 1 completa. El nodo de visión ya tiene servidor HTTP, captura,
+> ROI y contrato `/analyze`; la inferencia real queda pendiente de integrar
+> Edge Impulse con fotos y modelo. La validación en el armario físico también
+> está pendiente.
 
 ## Arquitectura
 
@@ -25,7 +24,7 @@ sensores infrarrojos y visión artificial.
 ```
 
 - **Placa maestra:** ESP32-S3-DevKitC-1 **N16R8** (16 MB flash, 8 MB PSRAM).
-- **Nodo de visión:** Seeed XIAO ESP32-S3 Sense (Fase 2).
+- **Nodo de visión:** Seeed XIAO ESP32-S3 Sense.
 - **Detección híbrida:** los IR deciden presencia; la cámara identifica la
   herramienta y valida que esté en la ranura correcta. Si discrepan, gana el IR
   y se genera una alerta.
@@ -47,6 +46,17 @@ sensores infrarrojos y visión artificial.
 - Hora por NTP y reconstrucción de eventos sin hora dentro del mismo arranque.
 - Cliente HTTP del nodo de visión con mDNS, análisis, foto y comparación IR/cámara.
 - Detección opcional de corte de red (desactivada hasta que la PCB entregue GPIO41).
+
+### Firmware del nodo de visión
+
+- WiFiManager con portal `ToolTrack-Cam` y mDNS `tooltrack-cam.local`.
+- Servidor HTTP con `/health`, `/capture.jpg`, `/analyze`, `/latest.jpg`,
+  `/latest.json` y `/rois`.
+- Captura UXGA en PSRAM y respaldo VGA si falla la inicialización.
+- ROI normalizadas 4x3 almacenadas en LittleFS (`rois.json`).
+- Contrato de análisis con presencia, herramienta, confianza y caja por ranura.
+- Interfaz de clasificador preparada; sin modelo devuelve 12 ranuras
+  desconocidas, sin inventar detecciones.
 
 ### Web y API
 
@@ -73,7 +83,7 @@ cp include/secrets.example.h include/secrets.h
 # 2. Compilar la placa maestra
 pio run -e main
 
-# 3. Compilar el nodo de visión (prueba de cámara de la Fase 2)
+# 3. Compilar el nodo de visión
 pio run -e camera
 
 # 4. Flashear la placa maestra
@@ -82,13 +92,17 @@ pio run -e main -t upload
 # 5. Subir la web a LittleFS
 pio run -e main -t uploadfs
 
-# 6. Monitor serial
+# 6. Flashear el nodo de visión cuando esté conectado por USB
+pio run -e camera -t upload
+
+# 7. Monitor serial
 pio device monitor -e main
 ```
 
-La primera vez, la placa maestra abre el portal WiFi **`ToolTrack-Setup`**.
-Conéctate desde el teléfono, elige la red del taller y escribe la contraseña.
-Si el portal expira, reinicia la placa para volver a abrirlo.
+La primera vez, la placa maestra abre el portal WiFi **`ToolTrack-Setup`** y
+el nodo de visión el portal **`ToolTrack-Cam`**. Conéctate desde el teléfono,
+elige la red del taller y escribe la contraseña. Si un portal expira, reinicia
+la placa correspondiente para volver a abrirlo.
 
 ## Primer acceso a la web
 
@@ -118,7 +132,7 @@ La contraseña inicial se define en `include/secrets.h`
 ```
 ├── include/            # configuración y secretos (secrets.h no se sube)
 ├── src/main/           # firmware de la placa maestra
-├── src/camera/         # firmware del nodo de visión (prueba de cámara)
+├── src/camera/         # nodo de visión: HTTP, cámara, ROI y clasificador
 ├── data/               # interfaz web para LittleFS
 ├── partitions/         # tablas de particiones personalizadas
 ├── docs/               # arquitectura, hardware, API, IA y operación
@@ -136,14 +150,16 @@ node --check data/app.js
 ```
 
 La compilación de `main` usa aproximadamente 15 % de RAM y 29 % de flash.
+La del nodo de visión usa aproximadamente 19 % de RAM y 25 % de flash.
 La interfaz se probó con una API simulada en Chromium, incluyendo login, cambio
 de contraseña, usuarios, herramientas, ajustes, sistema e histórico. Esa prueba
 no sustituye la validación con el hardware real.
 
 ## Limitaciones actuales
 
-- El nodo de visión de la Fase 2 todavía no implementa el servidor HTTP ni la
-  inferencia; `src/camera` solo inicializa la cámara y captura un frame de prueba.
+- El nodo HTTP y las ROI están implementados, pero **no hay modelo de
+  inferencia**: `/analyze` devuelve confianza 0 y las 12 ranuras como
+  desconocidas. No se simulan detecciones. Mientras tanto, el IR decide.
 - No se ha probado con la XIAO, la PCB, los IR ni la cerradura físicos.
 - Telegram está desactivado y su envío no está implementado. Los campos se
   conservan para una versión futura.
@@ -155,6 +171,8 @@ no sustituye la validación con el hardware real.
 - El router no está en el UPS: durante un corte se pierden web, cámara y NTP;
   RFID, IR, cerradura e historial local continúan. Telegram no está implementado.
 - Solo hay un administrador global y una sesión de administrador a la vez.
+- El nodo de visión no tiene autenticación: debe quedar en la red local del
+  taller, no expuesto a Internet.
 
 ## Documentación
 

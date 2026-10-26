@@ -9,15 +9,19 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - **Fase 1 — completada en firmware y web:** almacenamiento, RFID, 12 IR,
   actuadores, cliente de cámara, API REST, WebSocket, autenticación, panel de
   administración, histórico, exportación CSV, NTP y reconstrucción de hora.
-- **Compilación verificada:** `pio run -e main` y `pio run -e camera`.
-  `pio run -e main -t buildfs` genera la imagen de LittleFS.
+  Commit `b8f904d`.
+- **Compilación verificada:** `pio run -e main`, `pio run -e camera` y
+  `pio run -e main -t buildfs`.
 - **UI verificada con API simulada:** matriz 4x3, histórico, login, cambio
   obligatorio de contraseña, usuarios, herramientas, ajustes, sistema y visor
   de foto con cajas de la cámara. Sin errores de JavaScript en Chromium.
+- **Nodo de visión — base implementada:** servidor HTTP, captura
+  `/capture.jpg`, `/latest.jpg`, `/latest.json`, `/analyze`, configuración de
+  ROI por HTTP, ROI por defecto y clasificador stub. Compila para la XIAO.
 - **Pendiente de hardware:** XIAO ESP32-S3 Sense, placa maestra, PCB, tira LED,
   sensores y UPS. La lógica de campo no se ha probado todavía en el armario.
-- **Pendiente de Fase 2:** firmware del nodo de visión, calibración de ROI,
-  dataset, modelo Edge Impulse e inferencia real.
+- **Pendiente del nodo de visión:** validar la cámara real, calibrar ROI,
+  recolectar dataset, entrenar el modelo Edge Impulse e integrar la inferencia.
 - **Pendiente administrativo:** crear el repositorio remoto en GitHub y hacer
   el primer push.
 
@@ -76,10 +80,12 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 ## Día 4 — Nodo de visión: puesta en marcha
 
 - [ ] Probar la XIAO S3 Sense y la cámara.
-- [ ] Servidor HTTP del nodo: `/health`, `/latest.jpg`, `/analyze`.
-- [ ] Captura UXGA y recorte de las 12 ROI.
-- [ ] Script de calibración `tools/calibrate_rois.py`.
-- [ ] Verificar latencia y memoria con PSRAM.
+- [x] Servidor HTTP del nodo: `/health`, `/capture.jpg`, `/latest.jpg`,
+      `/latest.json`, `/analyze` y `/rois`.
+- [x] Captura UXGA, respaldo VGA y recorte de las 12 ROI.
+- [x] Script de calibración `tools/calibrate_rois.py`.
+- [ ] Verificar latencia y memoria con PSRAM en hardware real.
+- [x] Clasificador stub que no inventa detecciones sin modelo.
 
 ## Día 5 — Dataset
 
@@ -145,5 +151,6 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 10. La demo funciona sin intervención manual durante 30 minutos.
 
 Los criterios 1–5 y 8–9 están implementados en firmware y web, pero deben
-confirmarse con el armario físico. Los criterios 6–7 dependen de la Fase 2 y
-del entrenamiento del modelo. El criterio 10 requiere el ensayo final.
+confirmarse con el armario físico. El criterio 6 depende del dataset y del
+modelo Edge Impulse; el 7 ya está implementado y debe probarse con hardware.
+El criterio 10 requiere el ensayo final.

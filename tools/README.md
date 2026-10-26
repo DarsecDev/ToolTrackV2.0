@@ -20,6 +20,10 @@ python3 tools/collect_dataset.py --label A1_empty --count 40
 python3 tools/collect_dataset.py --label A1_tool_1 --count 60
 ```
 
+El script descarga frames completos desde `/capture.jpg`; el recorte de ROI y
+las clases finales (`empty`/`tool_N`) se preparan antes de subir el dataset a
+Edge Impulse.
+
 ## Calibración
 
 ```bash

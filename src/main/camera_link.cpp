@@ -114,7 +114,8 @@ bool analyze(AnalysisResult& result) {
   }
 
   result.processingMs = document["processingMs"] | 0;
-  result.capturedAt = document["capturedAt"] | timesync::nowEpoch();
+  const uint32_t capturedAt = document["capturedAt"] | 0;
+  result.capturedAt = capturedAt > 0 ? capturedAt : timesync::nowEpoch();
   const char* model = document["modelVersion"] | "";
   strncpy(result.modelVersion, model, sizeof(result.modelVersion) - 1);
   result.modelVersion[sizeof(result.modelVersion) - 1] = '\0';

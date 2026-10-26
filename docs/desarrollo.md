@@ -51,9 +51,11 @@ node --check data/app.js
 pio run -e main -t clean
 ```
 
-> `src/camera/` todavía es una prueba de cámara de la Fase 2: inicializa el
-> sensor y captura un frame, pero no levanta el servidor HTTP. Por eso
-> `pio run -e camera` compila y `ENABLE_WIFI=false` por ahora.
+> `src/camera/` ya implementa el servidor HTTP del nodo de visión, la captura,
+> las ROI y el contrato `/analyze`. El clasificador sigue siendo un stub hasta
+> integrar Edge Impulse; `ENABLE_WIFI=true` y el portal es `ToolTrack-Cam`.
+> Para el nodo de visión, LittleFS solo guarda `rois.json`, `last.jpg` y
+> `last_result.json`; la web no se sube a la cámara.
 
 Scripts de apoyo:
 
@@ -121,8 +123,11 @@ cambia el tamaño del sistema de archivos).
 ### WiFiManager no abre el portal
 
 - Esperar 180 s o reiniciar la placa.
-- Buscar la red `ToolTrack-Setup`.
-- Si el router cambió de contraseña, usar Administración → Reset WiFi.
+- Buscar la red `ToolTrack-Setup` en la maestra o `ToolTrack-Cam` en el nodo de
+  visión.
+- Si el router cambió de contraseña, usar Administración → Reset WiFi en la
+  maestra. El nodo de visión no tiene reset por web: hay que volver a flashear
+  o borrar su NVS.
 
 ## Git
 

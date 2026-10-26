@@ -15,11 +15,16 @@ constexpr char FIRMWARE_VERSION[] = "0.1.0";
 constexpr char HOSTNAME[]         = "tooltrack-cam";
 constexpr uint16_t HTTP_PORT      = 80;
 
-constexpr bool ENABLE_WIFI = false;  // se activa en la fase 2
+constexpr bool ENABLE_WIFI = true;
+constexpr uint32_t WIFI_PORTAL_TIMEOUT_MS = 180000;
 
 constexpr uint8_t TOOL_COUNT = 12;
 constexpr uint8_t GRID_ROWS  = 4;
 constexpr uint8_t GRID_COLS  = 3;
+
+constexpr char LAST_PHOTO_FILE[]  = "/last.jpg";
+constexpr char LAST_RESULT_FILE[] = "/last_result.json";
+constexpr char ROIS_FILE[]        = "/rois.json";
 
 // ------------------------------------------------------------
 //  Pines internos de la cámara OV2640 (XIAO ESP32-S3 Sense)

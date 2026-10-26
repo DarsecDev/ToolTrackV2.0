@@ -9,7 +9,9 @@ Uso:
     python3 tools/collect_dataset.py --label A1_empty --count 40
     python3 tools/collect_dataset.py --label A1_tool_1 --count 60 --interval 1.5
 
-El endpoint /capture.jpg se implementará en la Fase 2.
+El endpoint /capture.jpg captura un frame nuevo del nodo de visión. Las fotos
+son frames completos; antes de entrenar hay que recortar cada ROI y usar las
+etiquetas finales empty/tool_N.
 """
 
 import argparse

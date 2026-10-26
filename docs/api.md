@@ -1,8 +1,7 @@
 # API y WebSocket
 
-> Estado: contrato implementado en la Fase 1 para la placa maestra. El nodo de
-> visión (XIAO ESP32-S3 Sense) corresponde a la Fase 2 y se documenta al final
-> como contrato objetivo.
+> Estado: la API de la placa maestra está implementada (Fase 1). El nodo de
+> visión ya expone HTTP y ROI; su clasificador sigue pendiente de Edge Impulse.
 
 Base: `http://tooltrack.local` (o la IP que asigne el router).
 
@@ -293,54 +292,120 @@ puede enviar `{"type":"ping"}` y recibe `{"type":"pong"}`.
 Códigos de alerta: `access_denied`, `taken_without_session`,
 `ir_camera_mismatch`, `tool_wrong_slot`, `power_lost`.
 
-## API del nodo de visión (Fase 2)
+## API del nodo de visión
 
-Base: `http://tooltrack-cam.local`
+Base: `http://tooltrack-cam.local` (o la IP del nodo).
+
+El nodo no tiene autenticación y debe quedar en la red local del taller. El
+cliente de la placa maestra consulta `/health` y `/analyze`, y descarga
+`/latest.jpg`.
 
 ### `GET /health`
 
 ```json
-{ "ok": true, "firmware": "0.1.0", "model": "ei-tooltrack-v1", "psram": true }
+{
+  "ok": true,
+  "firmware": "0.1.0",
+  "role": "camera",
+  "uptime": 120,
+  "camera": true,
+  "rois": true,
+  "modelAvailable": false,
+  "modelVersion": "none",
+  "lastPhoto": true,
+  "lastResult": true,
+  "wifiConnected": true,
+  "ip": "192.168.1.51",
+  "rssi": -54,
+  "heap": 182000,
+  "psram": 7200000
+}
 ```
+
+`camera=false` indica que la cámara no inicializó; en ese caso `/health`
+responde `503` para que la placa maestra marque el nodo como desconectado.
+`modelAvailable=false` y `modelVersion="none"` son el estado actual hasta
+integrar Edge Impulse.
 
 ### `POST /analyze`
 
-La placa maestra envía `{"requestId":"..."}`. El nodo responde:
+La placa maestra envía `{"requestId":"..."}`; el nodo no usa ese campo. La
+respuesta actual, sin modelo, incluye las 12 ranuras como desconocidas:
 
 ```json
 {
-  "requestId": "...",
-  "capturedAt": 1761600000,
-  "processingMs": 1250,
-  "modelVersion": "ei-tooltrack-v1",
+  "ok": true,
+  "capturedAt": 0,
+  "processingMs": 180,
+  "modelVersion": "none",
   "width": 1600,
   "height": 1200,
   "slots": [
     {
       "slot": "A1",
-      "present": true,
-      "toolId": 0,
-      "confidence": 0.93,
-      "bbox": [10, 20, 300, 260]
+      "row": 0,
+      "column": 0,
+      "present": false,
+      "toolId": -1,
+      "label": "unknown",
+      "confidence": 0,
+      "bbox": [32, 24, 469, 252]
     }
   ]
 }
 ```
 
-`confidence` puede venir en escala 0–1 o 0–100; la placa maestra la normaliza.
-Si un slot no se incluye, se conserva sin cambio.
+Con un modelo integrado, `label` será `empty` o `tool_1`…`tool_12` y
+`confidence` irá de 0 a 1. La placa maestra acepta confianza en escala 0–1 o
+0–100. Si un slot no se incluye, conserva el estado anterior.
+
+El nodo de visión no sincroniza NTP; por eso `capturedAt` puede ser 0. La placa
+maestra usa su propia hora en ese caso. `processingMs` mide captura, conversión,
+recorte y clasificación.
 
 ### `GET /latest.jpg`
 
-Última imagen capturada.
+Última imagen guardada por `/capture.jpg` o `/analyze`.
 
 ### `GET /latest.json`
 
 Último resultado del análisis.
 
-### `POST /dataset/capture?label=A1_empty`
+### `GET /capture.jpg`
 
-Solo en modo recolección: guarda una foto etiquetada para entrenar.
+Captura un frame nuevo y actualiza `latest.jpg`. Es el endpoint que usa
+`tools/collect_dataset.py` para recolectar fotos.
+
+### `GET /rois`
+
+Devuelve las ROI normalizadas y el tamaño de la última imagen:
+
+```json
+{
+  "image_size": [1600, 1200],
+  "rois": {
+    "A1": [0.02, 0.02, 0.2933, 0.21]
+  }
+}
+```
+
+### `PUT /rois`
+
+Reemplaza las 12 ROI. Acepta el mismo JSON de `rois.json` o un objeto con las
+claves A1…D3. Exige las 12 zonas, valores normalizados entre 0 y 1 y que cada
+rectángulo quepa en la imagen.
+
+```json
+{
+  "rois": {
+    "A1": [0.04, 0.05, 0.28, 0.27],
+    "A2": [0.37, 0.05, 0.28, 0.27],
+    "A3": [0.70, 0.05, 0.28, 0.27]
+  }
+}
+```
+
+El ejemplo está abreviado; el body real debe incluir las 12 claves A1…D3.
 
 ## Códigos de error
 
@@ -350,6 +415,8 @@ Solo en modo recolección: guarda una foto etiquetada para entrenar.
 | 401 | Sesión requerida o expirada |
 | 403 | Acceso denegado, o `must_change_password` |
 | 404 | Recurso inexistente |
+| 409 | Ya hay un análisis o captura en curso |
 | 413 | Cuerpo de petición demasiado grande |
 | 429 | Demasiados intentos de login |
-| 500 | Error interno |
+| 500 | Error interno o fallo de cámara |
+| 503 | Cámara no disponible |

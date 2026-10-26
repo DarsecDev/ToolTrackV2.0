@@ -171,11 +171,23 @@ elimina usuarios, herramientas e histórico).
 
 **La cámara aparece desconectada.**
 El sistema sigue funcionando con los IR. Revisa la alimentación de la XIAO, la
-red WiFi y que el nodo de visión de la Fase 2 esté flashed y respondiendo.
+red WiFi y que el nodo esté flasheado. Comprueba `http://tooltrack-cam.local/health`
+o la IP que muestre su monitor serial.
+
+**La cámara está en línea pero no identifica herramientas.**
+Es el comportamiento esperado hasta integrar el modelo de Edge Impulse:
+`/analyze` devuelve confianza 0 y las ranuras como desconocidas. La decisión
+sigue siendo del IR.
 
 **La cámara detecta mal una herramienta.**
 La decisión final es del IR. Revisa la iluminación, la limpieza de la lente, la
 ROI y la etiqueta del modelo. La discrepancia queda registrada.
+
+**Necesito calibrar las zonas de la cámara.**
+Captura `http://tooltrack-cam.local/capture.jpg`, ejecuta
+`python3 tools/calibrate_rois.py foto.jpg --out rois.json` y sube el archivo con
+`curl -X PUT --data-binary @rois.json http://tooltrack-cam.local/rois`. Luego
+verifica con `/analyze` y una segunda foto.
 
 **No puedo iniciar sesión.**
 Tras cinco intentos fallidos hay un bloqueo de 60 segundos. La sesión de

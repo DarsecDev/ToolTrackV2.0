@@ -3,16 +3,17 @@
 ## Estado de implementación
 
 La Fase 1 está implementada y compila para la placa maestra. El nodo de visión
-es la Fase 2: el cliente HTTP de la maestra existe, pero el firmware de la XIAO
-todavía solo inicializa la cámara y captura un frame de prueba.
+tiene servidor HTTP, captura, ROI y contrato de análisis; la inferencia real
+queda pendiente de integrar Edge Impulse con un dataset y un modelo.
 
 | Componente | Estado |
 |---|---|
 | Placa maestra | Implementada; pendiente validar en hardware |
 | Web, API REST y WebSocket | Implementados y probados con API simulada |
 | RFID, 12 IR y actuadores | Implementados; pendiente validar en hardware |
-| Cliente de cámara y foto | Implementado; pendiente el nodo real |
-| Nodo de visión | Fase 2 |
+| Cliente de cámara y foto | Implementado; pendiente probar con la XIAO |
+| Nodo de visión (HTTP, cámara y ROI) | Implementado; pendiente probar en hardware |
+| Modelo de visión | Pendiente de dataset y Edge Impulse |
 | Telegram | No implementado |
 | OTA | No implementado; actualización por USB |
 
@@ -34,18 +35,24 @@ Responsabilidades:
 
 ### Nodo de visión — XIAO ESP32-S3 Sense
 
-Responsabilidades objetivo:
+Responsabilidades:
 
 - Inicializar la cámara OV2640.
-- Exponer `/health`, `/latest.jpg` y `/analyze`.
-- Capturar un frame, recortar las 12 zonas y ejecutar el modelo.
+- Exponer `/health`, `/capture.jpg`, `/analyze`, `/latest.jpg`, `/latest.json`
+  y `/rois`.
+- Capturar un frame, guardar la última foto y recortar las 12 zonas.
+- Ejecutar el modelo cuando esté integrado.
 - Devolver el resultado en JSON y conservar la última foto.
 - Reportar presencia, herramienta predicha, confianza y caja por ranura.
 
 La comunicación es **WiFi/HTTP** porque la placa maestra no tiene GPIO libres
 suficientes para un UART dedicado sin sacrificar los 12 IR. El nodo de visión
-no controla actuadores. En la Fase 1 el cliente de la maestra ya resuelve
-`tooltrack-cam.local` por mDNS y usa `http://tooltrack-cam.local` como respaldo.
+no controla actuadores. La maestra resuelve `tooltrack-cam.local` por mDNS y usa
+esa URL como respaldo.
+
+El nodo no tiene autenticación: debe quedar en la red local del taller. El
+clasificador es una interfaz con implementación stub; sin modelo, `/analyze`
+responde las 12 ranuras como desconocidas y no inventa detecciones.
 
 ## Flujo de una operación
 
@@ -80,8 +87,9 @@ no controla actuadores. En la Fase 1 el cliente de la maestra ya resuelve
   quedan sin hora absoluta: no se conserva un ancla de tiempo entre reinicios.
 - La detección de red presente usa GPIO41 con optoacoplador. Está implementada
   pero desactivada (`FEATURE_AC_SENSE=false`) hasta que la PCB entregue la señal.
-- El router no está en el UPS. Durante un corte se pierden web, cámara, NTP y
-  Telegram; RFID, IR, cerradura, LEDs e historial local siguen.
+- El router no está en el UPS. Durante un corte se pierden web, cámara y NTP;
+  RFID, IR, cerradura, LEDs e historial local siguen. Telegram no está
+  implementado.
 
 ## Modo degradado
 
@@ -104,6 +112,7 @@ no controla actuadores. En la Fase 1 el cliente de la maestra ya resuelve
 | Configuración de herramientas | LittleFS | `tools.json` |
 | Eventos | LittleFS | `events.jsonl` (rotación) |
 | Última foto y resultado | LittleFS | `last.jpg`, `last_result.json` |
+| ROI de la cámara | LittleFS | `rois.json` |
 | Web | LittleFS | `index.html`, `app.js`, `styles.css` |
 
 Los archivos JSON se escriben de forma atómica: primero a `.tmp`, luego
@@ -125,10 +134,13 @@ src/main/
 ├── actuators.*      # cerradura, LEDs, buzzer y tira LED
 ├── camera_link.*    # cliente HTTP del nodo de visión
 └── webserver.*      # REST, WebSocket, auth y archivos estáticos
-```
 
-`src/camera/` contiene por ahora la inicialización de cámara y una captura de
-prueba. La Fase 2 añadirá el servidor HTTP, las ROI y el modelo.
+src/camera/
+├── main.cpp              # WiFi, mDNS y arranque del servidor
+├── camera_vision.*       # cámara, ROI, foto y resultado
+├── camera_classifier.*   # interfaz del modelo; stub sin inferencia
+└── camera_webserver.*    # HTTP del nodo de visión
+```
 
 ## Decisiones de diseño
 
