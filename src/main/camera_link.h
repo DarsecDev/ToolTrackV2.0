@@ -10,6 +10,7 @@ namespace camera_link {
 struct AnalysisSlot {
   uint8_t toolId;
   bool present;
+  bool reported;
   int8_t predictedTool;
   uint8_t confidence;
 };

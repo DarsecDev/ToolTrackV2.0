@@ -58,6 +58,11 @@ pio run -e main -t clean
 > Para el nodo de visión, LittleFS solo guarda `rois.json`, `last.jpg` y
 > `last_result.json`; la web no se sube a la cámara.
 
+La placa maestra ejecuta el análisis de cámara en `cameraTask` (núcleo 0, 12 KB
+de pila). El `loop()` no espera las peticiones HTTP del nodo de visión: notifica
+la tarea, sigue atendiendo RFID/IR/cerradura y procesa el resultado cuando
+llega. El health se consulta cada 60 s dentro de la misma tarea.
+
 Scripts de apoyo:
 
 ```bash
@@ -136,7 +141,7 @@ cambia el tamaño del sistema de archivos).
 git status
 git add .
 git commit -m "feat(main): descripción corta"
-git push origin dev
+git push origin main
 ```
 
 Ramas:

@@ -18,6 +18,9 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - **Nodo de visión — base implementada:** servidor HTTP, captura
   `/capture.jpg`, `/latest.jpg`, `/latest.json`, `/analyze`, configuración de
   ROI por HTTP, ROI por defecto y clasificador stub. Compila para la XIAO.
+- **Análisis de cámara no bloqueante:** `cameraTask` ejecuta análisis, foto y
+  health en el núcleo 0 con 12 KB de pila; el `loop()` principal solo recoge
+  resultados. Compila para `main`; pendiente de validar en hardware.
 - **Pendiente de hardware:** XIAO ESP32-S3 Sense, placa maestra, PCB, lámpara 12 V,
   sensores y UPS. La lógica de campo no se ha probado todavía en el armario.
 - **Pendiente del nodo de visión:** validar la cámara real, calibrar ROI,
@@ -110,6 +113,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] Descarga de la última foto y metadatos.
 - [x] Comparación IR/cámara y alertas de discrepancia.
 - [x] Superposición de cajas en la web.
+- [x] Análisis, foto y health de cámara en tarea FreeRTOS no bloqueante.
 - [ ] Validar la integración con la XIAO y la cámara físicas.
 
 ## Día 8 — Robustez y extras

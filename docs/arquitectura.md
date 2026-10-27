@@ -11,7 +11,7 @@ queda pendiente de integrar Edge Impulse con un dataset y un modelo.
 | Placa maestra | Implementada; pendiente validar en hardware |
 | Web, API REST y WebSocket | Implementados y probados con API simulada |
 | RFID, 12 IR y actuadores | Implementados; pendiente validar en hardware |
-| Cliente de cámara y foto | Implementado; pendiente probar con la XIAO |
+| Cliente de cámara y foto | Implementado; análisis en tarea FreeRTOS, pendiente probar con la XIAO |
 | Nodo de visión (HTTP, cámara y ROI) | Implementado; pendiente probar en hardware |
 | Modelo de visión | Pendiente de dataset y Edge Impulse |
 | Telegram | No implementado |
@@ -29,7 +29,7 @@ Responsabilidades:
 - Mantener la sesión del usuario activo y registrar eventos.
 - Servir la web, la API REST y el WebSocket.
 - Sincronizar la hora por NTP y reconstruir eventos del arranque actual.
-- Orquestar la captura y el análisis del nodo de visión.
+- Orquestar la captura y el análisis del nodo de visión en segundo plano.
 - Detectar el corte de red si la PCB entrega la señal (función desactivada).
 - Enviar notificaciones por Telegram (previsto, no implementado).
 
@@ -74,6 +74,19 @@ responde las 12 ranuras como desconocidas y no inventa detecciones.
 7. Se guarda el evento y se actualiza la web por WebSocket.
 8. Si la cámara está disponible, se descarga la última foto y se muestra con
    las cajas de las 12 ranuras.
+
+### Tarea de visión en la placa maestra
+
+Para que una cámara lenta o desconectada no bloquee la cerradura ni la lectura
+de los IR, el análisis se ejecuta en `cameraTask`, una tarea FreeRTOS fijada al
+núcleo 0 con 12 KB de pila. La tarea realiza `POST /analyze`, descarga la foto y
+comprueba `GET /health` cada 60 s.
+
+El `loop()` principal solo notifica la tarea cuando vence el tiempo de
+estabilización de los IR, recoge el resultado protegido por una sección crítica
+y registra eventos, alertas y actualizaciones WebSocket. Si la tarea no se pudo
+crear o el nodo no responde, el IR decide y la web muestra la cámara offline.
+La lámpara de 12 V se enciende antes de capturar y se apaga por timeout.
 
 ## Tiempo y energía
 

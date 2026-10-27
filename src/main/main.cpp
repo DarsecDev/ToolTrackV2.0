@@ -4,6 +4,8 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <esp_random.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <cstring>
 
@@ -31,11 +33,17 @@ constexpr uint32_t CAMERA_HEALTH_MS = 60000;
 
 uint32_t s_lastHeartbeat = 0;
 uint32_t s_sessionStart = 0;
-uint32_t s_lastCameraHealth = 0;
 bool s_analysisPending = false;
-bool s_analysisRunning = false;
+bool s_cameraBusy = false;
 uint32_t s_analysisDue = 0;
 bool s_cameraOfflineLogged = false;
+
+TaskHandle_t s_cameraTask = nullptr;
+portMUX_TYPE s_cameraResultMux = portMUX_INITIALIZER_UNLOCKED;
+tt::camera_link::AnalysisResult s_cameraResult{};
+bool s_cameraResultOk = false;
+bool s_cameraResultReady = false;
+volatile bool s_cameraStatusDirty = false;
 bool s_acRaw = true;
 bool s_acStable = true;
 uint32_t s_acRawChanged = 0;
@@ -135,8 +143,55 @@ void logEvent(tt::EventAction action, int8_t toolId, const char* user,
                 event.returnedBy, static_cast<unsigned>(event.epoch));
 }
 
+void cameraTask(void*) {
+  uint32_t lastHealth = millis() - CAMERA_HEALTH_MS;
+
+  for (;;) {
+    const bool request =
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) > 0;
+
+    if (request) {
+      tt::camera_link::AnalysisResult result;
+      const bool ok = tt::camera_link::analyze(result);
+      if (ok) tt::camera_link::fetchPhoto();
+
+      portENTER_CRITICAL(&s_cameraResultMux);
+      s_cameraResult = result;
+      s_cameraResultOk = ok;
+      s_cameraResultReady = true;
+      portEXIT_CRITICAL(&s_cameraResultMux);
+
+      // Evita lanzar un health-check inmediatamente después del análisis.
+      lastHealth = millis();
+    }
+
+    const uint32_t now = millis();
+    if (tt::storage.settings().cameraEnabled &&
+        (now - lastHealth) >= CAMERA_HEALTH_MS) {
+      lastHealth = now;
+      tt::camera_link::health();
+      s_cameraStatusDirty = true;
+    }
+  }
+}
+
+void startCameraTask() {
+  if (!cfg::FEATURE_CAMERA) return;
+
+  if (xTaskCreatePinnedToCore(cameraTask, "camera", 12288, nullptr, 1,
+                              &s_cameraTask, 0) != pdPASS) {
+    s_cameraTask = nullptr;
+    Serial.println("[CAM] No se pudo crear la tarea de visión");
+    return;
+  }
+  Serial.println("[CAM] Tarea de visión iniciada en segundo plano");
+}
+
 void scheduleAnalysis(uint32_t delayMs = cfg::CAMERA_SETTLE_MS) {
-  if (!cfg::FEATURE_CAMERA || !tt::storage.settings().cameraEnabled) return;
+  if (!cfg::FEATURE_CAMERA || s_cameraTask == nullptr ||
+      !tt::storage.settings().cameraEnabled) {
+    return;
+  }
   s_analysisPending = true;
   s_analysisDue = millis() + delayMs;
 }
@@ -199,16 +254,11 @@ void handleIrChange(const tt::ir::Change& change) {
   scheduleAnalysis();
 }
 
-void handleCameraResult() {
-  s_analysisPending = false;
-
+void processCameraResult(bool ok,
+                         const tt::camera_link::AnalysisResult& result) {
   if (!tt::storage.settings().cameraEnabled) return;
 
-  // La tira blanca ayuda a la cámara y se apaga sola por timeout.
-  tt::actuators::ledStripOn(cfg::LED_STRIP_ON_MS);
-
-  tt::camera_link::AnalysisResult result;
-  if (!tt::camera_link::analyze(result)) {
+  if (!ok) {
     Serial.println("[CAM] Análisis no disponible; decide el IR");
     if (!s_cameraOfflineLogged) {
       logEvent(tt::ACTION_CAMERA_OFFLINE, -1, "Sistema", "", tt::SOURCE_SYSTEM,
@@ -223,9 +273,15 @@ void handleCameraResult() {
 
   bool mismatch = false;
   for (uint8_t i = 0; i < tt::TOOL_COUNT; i++) {
-    if (!tt::g_state.tools[i].known) continue;
-
     const tt::camera_link::AnalysisSlot& slot = result.slots[i];
+
+    // El estado global solo se modifica desde el loop principal. La tarea de
+    // cámara se limita a devolver el resultado por la cola protegida.
+    if (slot.reported) {
+      tt::stateSetCameraResult(i, slot.present, slot.confidence);
+    }
+
+    if (!tt::g_state.tools[i].known) continue;
     if (slot.confidence < cfg::CAMERA_MIN_CONFIDENCE) continue;
 
     const bool irPresent = tt::g_state.tools[i].present;
@@ -250,7 +306,9 @@ void handleCameraResult() {
 
   if (mismatch) tt::actuators::denyAlert();
 
-  tt::camera_link::fetchPhoto();
+  // La lámpara ya se encendió al lanzar el análisis; se extiende el tiempo
+  // para que el usuario pueda ver el armario mientras revisa la web.
+  tt::actuators::ledStripOn(cfg::LED_STRIP_ON_MS);
 
   // Refrescar en la web la confianza y la lectura de cámara de cada ranura.
   tt::webserver::broadcastSnapshot();
@@ -345,6 +403,7 @@ void setup() {
   connectWiFi();
   tt::timesync::begin();
   tt::webserver::begin();
+  startCameraTask();
 
   printHeartbeat();
 }
@@ -383,18 +442,41 @@ void loop() {
     scheduleAnalysis(50);
   }
 
-  if (s_analysisPending && !s_analysisRunning &&
-      static_cast<int32_t>(now - s_analysisDue) >= 0) {
-    s_analysisRunning = true;
-    handleCameraResult();
-    s_analysisRunning = false;
+  if (s_cameraStatusDirty) {
+    s_cameraStatusDirty = false;
+    // Si el health vuelve a responder, permitir que un fallo posterior
+    // vuelva a registrarse como cámara offline.
+    if (tt::g_state.cameraOnline) s_cameraOfflineLogged = false;
+    tt::webserver::broadcastCameraStatus();
   }
 
-  if (cfg::FEATURE_CAMERA && tt::storage.settings().cameraEnabled &&
-      (now - s_lastCameraHealth) >= CAMERA_HEALTH_MS) {
-    s_lastCameraHealth = now;
-    if (tt::camera_link::health()) s_cameraOfflineLogged = false;
-    tt::webserver::broadcastCameraStatus();
+  if (s_analysisPending && !s_cameraBusy && s_cameraTask != nullptr &&
+      static_cast<int32_t>(now - s_analysisDue) >= 0) {
+    s_analysisPending = false;
+    s_cameraBusy = true;
+    // Encender la lámpara antes de que la tarea de visión capture el frame.
+    tt::actuators::ledStripOn(cfg::LED_STRIP_ON_MS);
+    if (xTaskNotifyGive(s_cameraTask) != pdPASS) {
+      s_cameraBusy = false;
+      Serial.println("[CAM] No se pudo despertar la tarea de visión");
+    }
+  }
+
+  bool resultReady = false;
+  bool resultOk = false;
+  tt::camera_link::AnalysisResult cameraResult{};
+  portENTER_CRITICAL(&s_cameraResultMux);
+  if (s_cameraResultReady) {
+    cameraResult = s_cameraResult;
+    resultOk = s_cameraResultOk;
+    s_cameraResultReady = false;
+    resultReady = true;
+  }
+  portEXIT_CRITICAL(&s_cameraResultMux);
+
+  if (resultReady) {
+    s_cameraBusy = false;
+    processCameraResult(resultOk, cameraResult);
   }
 
   if (now - s_lastHeartbeat >= HEARTBEAT_MS) {

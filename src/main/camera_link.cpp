@@ -71,6 +71,7 @@ bool analyze(AnalysisResult& result) {
   for (uint8_t i = 0; i < TOOL_COUNT; i++) {
     result.slots[i].toolId = i;
     result.slots[i].present = false;
+    result.slots[i].reported = false;
     result.slots[i].predictedTool = -1;
     result.slots[i].confidence = 0;
   }
@@ -142,12 +143,10 @@ bool analyze(AnalysisResult& result) {
     if (rawConfidence > 100) rawConfidence = 100;
 
     result.slots[toolId].present = present;
+    result.slots[toolId].reported = true;
     result.slots[toolId].predictedTool = static_cast<int8_t>(predicted);
     result.slots[toolId].confidence =
         static_cast<uint8_t>(rawConfidence + 0.5f);
-
-    stateSetCameraResult(toolId, present,
-                         result.slots[toolId].confidence);
   }
 
   File file = LittleFS.open(cfg::LAST_RESULT_FILE, "w");
