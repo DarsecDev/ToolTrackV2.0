@@ -56,14 +56,14 @@ constexpr uint32_t RFID_SCAN_MS  = 50;
 // ------------------------------------------------------------
 //  Actuadores
 // ------------------------------------------------------------
-constexpr uint8_t  PIN_LOCK       = 18;  // MOSFET / relé de la cerradura 12 V
+constexpr uint8_t  PIN_LOCK       = 18;  // MOSFET cerradura 12 V: HIGH = cerrada (fail-safe)
 constexpr uint8_t  PIN_LED_GREEN  = 21;
 constexpr uint8_t  PIN_LED_RED    = 47;
 constexpr uint8_t  PIN_BUZZER     = 39;
-constexpr uint8_t  PIN_LED_STRIP  = 40;  // MOSFET de la tira LED 12 V
+constexpr uint8_t  PIN_LED_STRIP  = 40;  // MOSFET de la lámpara LED 12 V
 constexpr uint8_t  PIN_AC_SENSE   = 41;  // Detección de corte de red (opcional)
 
-constexpr uint32_t LOCK_PULSE_MS    = 3000;
+constexpr uint32_t LOCK_PULSE_MS    = 3000;  // tiempo que permanece abierta
 constexpr uint32_t LED_STRIP_ON_MS  = 60000;
 constexpr uint32_t BEEP_MS          = 150;
 constexpr uint32_t ALERT_BLINK_MS   = 250;

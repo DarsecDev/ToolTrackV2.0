@@ -4,10 +4,10 @@ Armario inteligente de control de inventario de herramientas. Registra qué
 herramienta se toma, cuándo y quién la toma, y verifica la devolución con
 sensores infrarrojos y visión artificial.
 
-> **Estado:** Fase 1 completa. El nodo de visión ya tiene servidor HTTP, captura,
-> ROI y contrato `/analyze`; la inferencia real queda pendiente de integrar
-> Edge Impulse con fotos y modelo. La validación en el armario físico también
-> está pendiente.
+> **Estado:** Fases 0–2 completas. El nodo de visión ya tiene servidor HTTP,
+> captura, ROI y contrato `/analyze`; la inferencia real queda pendiente de
+> integrar Edge Impulse con fotos y modelo. La validación en el armario físico
+> también está pendiente.
 
 ## Arquitectura
 
@@ -28,8 +28,9 @@ sensores infrarrojos y visión artificial.
 - **Detección híbrida:** los IR deciden presencia; la cámara identifica la
   herramienta y valida que esté en la ranura correcta. Si discrepan, gana el IR
   y se genera una alerta.
-- **Energía:** 12 V desde un mini UPS; buck 12→5 V para las placas. El router
-  no está respaldado por el UPS.
+- **Energía:** 12 V desde un mini UPS; buck 12→5 V para las placas y otro
+  12→3.3 V para los 12 IR y el RC522. La cerradura es fail-safe y la lámpara es
+  de 12 V / 60 mA. El router no está respaldado por el UPS.
 - **Almacenamiento:** NVS para secretos y configuración sensible; LittleFS para
   usuarios, herramientas, eventos, última foto y web.
 - **Hora:** NTP con reconstrucción de eventos de la sesión de arranque actual.
@@ -40,7 +41,7 @@ sensores infrarrojos y visión artificial.
 
 - Lectura RC522 por SPI, UID en hexadecimal y sesión del último usuario válido.
 - 12 entradas IR con antirrebote y detección de flancos.
-- Cerradura 12 V, LED verde/rojo, buzzer y tira LED no bloqueantes.
+- Cerradura 12 V fail-safe, LED verde/rojo, buzzer y lámpara 12 V no bloqueantes.
 - Registro de accesos, tomadas, devoluciones, discrepancias y alertas.
 - Historial en PSRAM con respaldo JSONL en LittleFS y rotación configurable.
 - Hora por NTP y reconstrucción de eventos sin hora dentro del mismo arranque.
@@ -169,7 +170,8 @@ no sustituye la validación con el hardware real.
 - La reconstrucción de hora cubre eventos del arranque actual. Si hay un apagón
   total antes de sincronizar NTP, esos eventos quedan sin hora absoluta.
 - El router no está en el UPS: durante un corte se pierden web, cámara y NTP;
-  RFID, IR, cerradura e historial local continúan. Telegram no está implementado.
+  RFID, IR, cerradura e historial local continúan. Si el UPS se agota, la
+  cerradura fail-safe se abre. Telegram no está implementado.
 - Solo hay un administrador global y una sesión de administrador a la vez.
 - El nodo de visión no tiene autenticación: debe quedar en la red local del
   taller, no expuesto a Internet.
@@ -178,6 +180,7 @@ no sustituye la validación con el hardware real.
 
 - [Arquitectura](docs/arquitectura.md)
 - [Hardware y pinout](docs/hardware.md)
+- [BOM total y consumos](docs/BOM_ToolTrack.xlsx)
 - [API y WebSocket](docs/api.md)
 - [Visión artificial](docs/ml.md)
 - [Manual de operación](docs/operacion.md)

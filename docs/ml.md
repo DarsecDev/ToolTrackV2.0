@@ -69,7 +69,7 @@ Total aproximado: **1.200–1.800 imágenes**. Con aumentos de datos
 
 ### Protocolo
 
-1. Montar la cámara y la tira LED en su posición definitiva.
+1. Montar la cámara y la lámpara 12 V en su posición definitiva.
 2. Fijar la resolución y la calidad de JPEG.
 3. Ejecutar `tools/collect_dataset.py` con la etiqueta correspondiente.
    El script descarga frames completos desde `/capture.jpg`; las etiquetas
@@ -78,7 +78,7 @@ Total aproximado: **1.200–1.800 imágenes**. Con aumentos de datos
    `empty`/`tool_1`…`tool_12`.
 4. Variar:
    - herramienta centrada, corrida, rotada;
-   - luz ambiental y tira LED encendida/apagada;
+   - luz ambiental y lámpara 12 V encendida/apagada;
    - puerta abierta y cerrada (si afecta la iluminación).
 5. Revisar y descartar fotos borrosas o mal etiquetadas.
 6. Subir el dataset a Edge Impulse.

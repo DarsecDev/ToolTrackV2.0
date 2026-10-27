@@ -20,9 +20,13 @@ void setBuzzer(bool on) {
 }  // namespace
 
 void begin() {
-  const uint8_t outputs[] = {cfg::PIN_LOCK, cfg::PIN_LED_GREEN,
-                             cfg::PIN_LED_RED, cfg::PIN_BUZZER,
-                             cfg::PIN_LED_STRIP};
+  // Cerradura fail-safe: HIGH = cerrada. Se configura antes que el resto de
+  // salidas para no dejarla abierta durante el arranque.
+  pinMode(cfg::PIN_LOCK, OUTPUT);
+  digitalWrite(cfg::PIN_LOCK, HIGH);
+
+  const uint8_t outputs[] = {cfg::PIN_LED_GREEN, cfg::PIN_LED_RED,
+                             cfg::PIN_BUZZER, cfg::PIN_LED_STRIP};
   for (uint8_t pin : outputs) {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, LOW);
@@ -32,7 +36,7 @@ void begin() {
   s_stripUntil = 0;
   s_alertActive = false;
   s_alertUntil = 0;
-  Serial.println("[ACT] Salidas en estado seguro");
+  Serial.println("[ACT] Salidas en estado fail-safe (cerradura cerrada)");
 }
 
 void unlock(uint32_t durationMs) {
@@ -45,7 +49,7 @@ void unlock(uint32_t durationMs) {
   setBuzzer(false);
 
   digitalWrite(cfg::PIN_LED_RED, LOW);
-  digitalWrite(cfg::PIN_LOCK, HIGH);
+  digitalWrite(cfg::PIN_LOCK, LOW);  // fail-safe: LOW = abierta
   digitalWrite(cfg::PIN_LED_GREEN, HIGH);
   s_lockUntil = now + durationMs;
 
@@ -81,14 +85,14 @@ void ledStripOff() {
   s_stripUntil = 0;
 }
 
-bool lockOpen() { return digitalRead(cfg::PIN_LOCK) == HIGH; }
+bool lockOpen() { return digitalRead(cfg::PIN_LOCK) == LOW; }
 
 void update() {
   const uint32_t now = millis();
 
   if (s_lockUntil != 0 &&
       static_cast<int32_t>(now - s_lockUntil) >= 0) {
-    digitalWrite(cfg::PIN_LOCK, LOW);
+    digitalWrite(cfg::PIN_LOCK, HIGH);  // fail-safe: HIGH = cerrada
     digitalWrite(cfg::PIN_LED_GREEN, LOW);
     s_lockUntil = 0;
   }

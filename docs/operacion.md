@@ -43,7 +43,7 @@ La contraseña inicial se configura en `include/secrets.h`. No se debe dejar
 2. **Acceso autorizado:**
    - La cerradura se abre durante 3 segundos.
    - El LED verde se enciende y suena un beep corto.
-   - La tira LED se enciende durante 60 segundos.
+   - La lámpara 12 V se enciende durante 60 segundos.
    - El usuario queda como sesión activa.
 3. Tomar o devolver una herramienta.
 4. El cambio de IR se registra y la web se actualiza por WebSocket.
@@ -123,7 +123,7 @@ Si se retira una herramienta sin una sesión activa:
 | LED rojo intermitente | Acceso denegado, discrepancia IR/cámara o tomada sin sesión |
 | Beep corto | Acceso correcto |
 | Beep intermitente | Alerta |
-| Tira LED encendida | Armario en uso o cámara capturando; se apaga a los 60 s |
+| Lámpara 12 V encendida | Armario en uso o cámara capturando; se apaga a los 60 s |
 | Cámara “En línea” | El nodo respondió al último chequeo |
 | Cámara “Sin conexión” | El IR sigue decidiendo; se registra el evento y se alerta |
 
@@ -146,7 +146,9 @@ No hay un LED rojo fijo de “sistema bloqueado” en la versión actual.
 El router no está conectado al UPS. Si se corta la red eléctrica o el router:
 
 - La placa maestra sigue alimentada por el UPS y continúa leyendo RFID e IR.
-- La cerradura, los LEDs, el buzzer y la tira LED siguen funcionando.
+- La cerradura, los LEDs, el buzzer y la lámpara 12 V siguen funcionando.
+- Si el UPS se agota, la cerradura fail-safe se abre; el armario queda sin
+  bloqueo hasta que vuelva la energía.
 - Los eventos se guardan en LittleFS con `uptimeMs`.
 - La web, la cámara y NTP no están disponibles. Telegram no está implementado.
 - Al volver la red y sincronizar NTP, los eventos de ese mismo arranque

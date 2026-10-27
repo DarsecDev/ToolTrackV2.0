@@ -18,7 +18,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - **Nodo de visión — base implementada:** servidor HTTP, captura
   `/capture.jpg`, `/latest.jpg`, `/latest.json`, `/analyze`, configuración de
   ROI por HTTP, ROI por defecto y clasificador stub. Compila para la XIAO.
-- **Pendiente de hardware:** XIAO ESP32-S3 Sense, placa maestra, PCB, tira LED,
+- **Pendiente de hardware:** XIAO ESP32-S3 Sense, placa maestra, PCB, lámpara 12 V,
   sensores y UPS. La lógica de campo no se ha probado todavía en el armario.
 - **Pendiente del nodo de visión:** validar la cámara real, calibrar ROI,
   recolectar dataset, entrenar el modelo Edge Impulse e integrar la inferencia.
@@ -43,7 +43,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] Documentación inicial.
 - [x] Verificar compilación de ambos entornos.
 - [ ] Crear repositorio remoto en GitHub y primer push.
-- [ ] Confirmar pedido de XIAO, tira LED y mini UPS.
+- [ ] Confirmar pedido de XIAO, lámpara 12 V y mini UPS.
 
 ## Día 1 — Núcleo de almacenamiento y configuración
 
@@ -60,7 +60,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] `rfid`: lectura RC522, UID a hexadecimal, búsqueda de usuario.
 - [x] `ir_sensors`: antirrebote, detección de flancos, estado inicial sin
       eventos falsos.
-- [x] `actuators`: cerradura, LED verde/rojo, buzzer y tira LED no
+- [x] `actuators`: cerradura, LED verde/rojo, buzzer y lámpara 12 V no
       bloqueantes.
 - [x] Sesión de usuario y registro de accesos.
 - [x] Manejo de herramienta tomada sin sesión.

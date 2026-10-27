@@ -25,7 +25,7 @@ Responsabilidades:
 
 - Leer el lector RFID RC522 por SPI.
 - Leer los 12 sensores IR de la matriz 4x3.
-- Controlar la cerradura de 12 V, los LEDs, el buzzer y la tira LED.
+- Controlar la cerradura de 12 V, los LEDs, el buzzer y la lámpara 12 V.
 - Mantener la sesión del usuario activo y registrar eventos.
 - Servir la web, la API REST y el WebSocket.
 - Sincronizar la hora por NTP y reconstruir eventos del arranque actual.
@@ -59,7 +59,7 @@ responde las 12 ranuras como desconocidas y no inventa detecciones.
 1. El usuario pasa su tarjeta RFID.
 2. La placa maestra valida el UID:
    - **Autorizado:** abre la cerradura 3 s, enciende el LED verde, suena el
-     buzzer, enciende la tira LED y activa la sesión del usuario.
+     buzzer, enciende la lámpara 12 V y activa la sesión del usuario.
    - **Denegado:** parpadea el LED rojo y el buzzer; registra el intento.
 3. Los cambios de los IR generan eventos de tomada o devolución tras el
    antirrebote.
@@ -131,7 +131,7 @@ src/main/
 ├── time_sync.*      # NTP, epoch y reconstrucción
 ├── rfid.*           # RC522 y UID
 ├── ir_sensors.*     # antirrebote y flancos
-├── actuators.*      # cerradura, LEDs, buzzer y tira LED
+├── actuators.*      # cerradura, LEDs, buzzer y lámpara 12 V
 ├── camera_link.*    # cliente HTTP del nodo de visión
 └── webserver.*      # REST, WebSocket, auth y archivos estáticos
 
