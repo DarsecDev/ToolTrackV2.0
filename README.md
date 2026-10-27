@@ -107,6 +107,44 @@ el nodo de visión el portal **`ToolTrack-Cam`**. Conéctate desde el teléfono,
 elige la red del taller y escribe la contraseña. Si un portal expira, reinicia
 la placa correspondiente para volver a abrirlo.
 
+## Demo local sin hardware
+
+Si todavía no tienes ESP32, XIAO ni sensores, puedes ver la web real
+funcionando con una API simulada. El servidor de demo sirve `data/`, simula el
+WebSocket, el histórico, los usuarios y la foto del armario, y genera eventos
+automáticamente.
+
+```bash
+python3 -m pip install -r tools/requirements-demo.txt
+./tools/run_mock.sh
+```
+
+Abre **http://127.0.0.1:8000** y entra en **Administración** con la contraseña
+`tooltrack`.
+
+- `--auto 8` genera un evento cada 8 s (valor por defecto).
+- `--auto 0` desactiva la simulación automática.
+- `POST /api/demo/simulate` fuerza un evento; solo existe en la demo.
+- `--host 0.0.0.0 --port 8080` permite abrirlo desde otro equipo de la red.
+
+La demo no sustituye al firmware: sirve para revisar la interfaz, el flujo de
+administración y el histórico antes de montar el armario. Los datos viven en
+memoria y se reinician al detener el proceso.
+
+## Pruebas nativas
+
+La lógica que no depende de hardware se compila y ejecuta en el host, sin
+PlatformIO:
+
+```bash
+./test/native/run_tests.sh
+```
+
+Cubre el mapeo de ranuras, nombres de acciones y fuentes, pines prohibidos,
+estado de herramientas y sesión, antirrebote de los 12 IR y el fail-safe de
+actuadores (incluido el desbordamiento de `millis()`). El mismo comando se
+ejecuta en GitHub Actions antes de compilar el firmware.
+
 ## Primer acceso a la web
 
 1. Abre `http://tooltrack.local` o la IP que aparezca en el monitor serial.
@@ -146,6 +184,7 @@ La contraseña inicial se define en `include/secrets.h`
 ## Verificación
 
 ```bash
+./test/native/run_tests.sh
 pio run -e main
 pio run -e camera
 pio run -e main -t buildfs
@@ -154,9 +193,10 @@ node --check data/app.js
 
 La compilación de `main` usa aproximadamente 15 % de RAM y 29 % de flash.
 La del nodo de visión usa aproximadamente 19 % de RAM y 25 % de flash.
-La interfaz se probó con una API simulada en Chromium, incluyendo login, cambio
-de contraseña, usuarios, herramientas, ajustes, sistema e histórico. Esa prueba
-no sustituye la validación con el hardware real.
+Las pruebas nativas y la sintaxis de la web también se ejecutan en CI. La
+interfaz se probó con el servidor de demo en Chromium, incluyendo login,
+usuarios, herramientas, ajustes, histórico, WebSocket y foto simulada. Esa
+prueba no sustituye la validación con el hardware real.
 
 ## Limitaciones actuales
 

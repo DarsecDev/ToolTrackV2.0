@@ -15,6 +15,13 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - **UI verificada con API simulada:** matriz 4x3, histórico, login, cambio
   obligatorio de contraseña, usuarios, herramientas, ajustes, sistema y visor
   de foto con cajas de la cámara. Sin errores de JavaScript en Chromium.
+- **Demo local sin hardware:** `tools/mock_server.py` sirve la web real,
+  simula API/WebSocket/histórico/foto y genera eventos. Verificado en Chromium
+  con 12 ranuras, badge «En vivo» y eventos en tiempo real.
+- **Pruebas nativas:** `./test/native/run_tests.sh` compila la lógica real con
+  un stub de Arduino y pasa 382 comprobaciones (ranuras, pines, estado,
+  antirrebote IR, fail-safe y desbordamiento de `millis()`). Integrado en
+  GitHub Actions.
 - **Nodo de visión — base implementada:** servidor HTTP, captura
   `/capture.jpg`, `/latest.jpg`, `/latest.json`, `/analyze`, configuración de
   ROI por HTTP, ROI por defecto y clasificador stub. Compila para la XIAO.
@@ -121,6 +128,8 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] Estado de hardware en la web (uptime, heap, PSRAM, RSSI, cámara).
 - [x] Recuperación ante fallos de cámara o WiFi (modo degradado).
 - [x] Historial local aunque no haya router.
+- [x] Pruebas nativas de pines, estado, IR y actuadores en host.
+- [x] Servidor de demo local para la web sin hardware.
 - [ ] Pruebas de tomada/devolución y de ranura incorrecta en hardware.
 - [ ] Telegram si el tiempo lo permite (primera función a recortar).
 - [x] Optimización básica de memoria: historial en PSRAM y búfer circular.
@@ -128,6 +137,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 ## Día 9 — Documentación y ensayo
 
 - [x] Documentación de arquitectura, hardware, API y operación de Fase 1.
+- [x] Documentar pruebas nativas y demo local en README y guía de desarrollo.
 - [ ] Completar el guion de demo y el manual de mantenimiento final.
 - [ ] Prueba completa de 30 minutos con usuarios reales.
 - [ ] Exportar binarios y crear release `v1.0.0`.

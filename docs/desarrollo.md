@@ -70,6 +70,52 @@ Scripts de apoyo:
 ./tools/flash_camera.sh
 ```
 
+## Demo local sin hardware
+
+`tools/mock_server.py` sirve la web de `data/` y simula la API REST, el
+WebSocket, el histórico, los usuarios y la foto del armario. Sirve para
+desarrollar y presentar la interfaz sin placas.
+
+```bash
+python3 -m pip install -r tools/requirements-demo.txt
+./tools/run_mock.sh
+```
+
+- URL: `http://127.0.0.1:8000`
+- Contraseña de administrador: `tooltrack` (sin cambio obligatorio)
+- `--auto 8`: evento simulado cada 8 s (por defecto).
+- `--auto 0`: sin simulación automática.
+- `--host 0.0.0.0 --port 8080`: accesible desde la red local.
+- `POST /api/demo/simulate`: fuerza un evento; solo existe en la demo.
+
+El estado es en memoria: al detener el servidor se pierden usuarios, eventos y
+ajustes simulados. La demo no habla con el ESP32 ni con la cámara.
+
+## Pruebas nativas
+
+Las pruebas de host compilan la lógica real de `src/main/` con un stub mínimo de
+`Arduino.h`, sin PlatformIO ni hardware:
+
+```bash
+./test/native/run_tests.sh
+```
+
+Cubren:
+
+- Mapeo de las 12 ranuras y nombres de acciones/fuentes.
+- Pines usados y pines prohibidos del ESP32-S3.
+- Estado de herramientas, cámara y sesión.
+- Antirrebote y flancos de los 12 IR.
+- Fail-safe, temporizadores de cerradura y alertas, y desbordamiento de
+  `millis()`.
+
+El script devuelve código distinto de cero si falla una comprobación. GitHub
+Actions lo ejecuta antes de compilar `main` y `camera`, junto con
+`node --check data/app.js`.
+
+Pendiente de pruebas: rotación/serialización de `storage.cpp`, parser de
+`/analyze` y recuperación de cámara offline.
+
 ## Estructura de compilación
 
 - `src/main/` solo se compila en `main`.
