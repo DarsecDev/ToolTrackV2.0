@@ -1,5 +1,7 @@
 # ToolTrack v2
 
+Repositorio: https://github.com/DarsecDev/ToolTrackV2.0
+
 Armario inteligente de control de inventario de herramientas. Registra qué
 herramienta se toma, cuándo y quién la toma, y verifica la devolución con
 sensores infrarrojos y visión artificial.

@@ -25,8 +25,8 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
   sensores y UPS. La lógica de campo no se ha probado todavía en el armario.
 - **Pendiente del nodo de visión:** validar la cámara real, calibrar ROI,
   recolectar dataset, entrenar el modelo Edge Impulse e integrar la inferencia.
-- **Pendiente administrativo:** crear el repositorio remoto en GitHub y hacer
-  el primer push.
+- **Repositorio remoto:** https://github.com/DarsecDev/ToolTrackV2.0, rama
+  `main` subida.
 
 ### Ruta crítica
 
@@ -45,7 +45,7 @@ Inicio: 26 de octubre de 2026. Entrega objetivo: expo/feria en 10 días.
 - [x] Web base en `data/`.
 - [x] Documentación inicial.
 - [x] Verificar compilación de ambos entornos.
-- [ ] Crear repositorio remoto en GitHub y primer push.
+- [x] Crear repositorio remoto en GitHub y primer push.
 - [ ] Confirmar pedido de XIAO, lámpara 12 V y mini UPS.
 
 ## Día 1 — Núcleo de almacenamiento y configuración
